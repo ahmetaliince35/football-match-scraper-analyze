@@ -1,7 +1,12 @@
 import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
+// 1. ADIM: URL'deki dinamik lig parametresini okumak için useParams hook'unu import ediyoruz
+import { useParams, Link } from "react-router-dom"; 
 
 export default function LeaguePage() {
+    // URL'den gelen lig belirtecini alıyoruz (Örn: /league/:leagueId -> premier-league, super-lig vb.)
+    const { leagueId } = useParams(); 
+
     const [teams, setTeams] = useState([]);
     const [filteredMatches, setFilteredMatches] = useState([]); 
 
@@ -11,62 +16,72 @@ export default function LeaguePage() {
     const [homeTeam, setHomeTeam] = useState("");
     const [awayTeam, setAwayTeam] = useState("");
     const [loading, setLoading] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(20);
 
-    // 1. İLK AÇILIŞ: Hiçbir parametre olmadan tüm kayıtlı maçları çeker
+    // Lig id'lerine göre ekranda düzgün başlık göstermek için bir sözlük (Dictionary)
+    const leagueTitles = {
+        "premier-league": "Premier League İstasyon Paneli",
+        "super-lig": "Trendyol Süper Lig İstasyon Paneli",
+        "la-liga": "La Liga İstasyon Paneli",
+        "serie-a": "Serie A İstasyon Paneli"
+    };
+
+    // 2. ADIM: Her lig değişiminde input filtrelerini sıfırlamak ve yeni ligin verisini çekmek için useEffect bağımlılığına `leagueId` ekledik
     useEffect(() => {
         setLoading(true);
+        // Lig değiştiğinde eski seçili takımları temizle
+        setHomeTeam("");
+        setAwayTeam("");
+        setSelectedSeason("Tüm Sezonlar");
 
+        // Backend API'nize hangi ligin istendiğini query param olarak geçiyoruz: ?league=premier-league
+        const baseUrl = "http://127.0.0.1:8000";
+        
         Promise.all([
-            fetch("http://127.0.0.1:8000/teams").then(res => res.json()),
-            fetch("http://127.0.0.1:8000/matches").then(res => res.json()) // İlk açılışta tüm maçlar gelir
+            fetch(`${baseUrl}/teams?league=${leagueId}`).then(res => res.json()),
+            fetch(`${baseUrl}/matches?league=${leagueId}`).then(res => res.json())
         ]).then(([teamsData, matchesData]) => {
             setTeams(Array.isArray(teamsData) ? teamsData : []);
             setFilteredMatches(Array.isArray(matchesData) ? matchesData : []);
+            setVisibleCount(20);
 
-            // Sezon seçeneklerini doldurmak için gelen tüm maçların içindeki sezonları listeler
             if (Array.isArray(matchesData)) {
                 const uniqueSeasons = Array.from(new Set(matchesData.map(m => m.season))).filter(Boolean).sort();
                 setSeasons(uniqueSeasons);
             }
             setLoading(false);
         }).catch(err => {
-            console.error("API verileri yüklenirken hata:", err);
+            console.error(`${leagueId} verileri yüklenirken hata:`, err);
             setLoading(false);
         });
-    }, []);
+    }, [leagueId]); // leagueId değiştiğinde bu useEffect tetiklenecek
 
-    // 2. DİNAMİK FİLTRELEME: Kullanıcının seçtiği kombinasyona göre backend'den verileri çeker
+    // 3. ADIM: Dinamik filtreleme yaparken de hangi ligde olduğumuzu backend'e söylemeliyiz
     const handleFilterMatches = () => {
         setLoading(true);
         
-        let url = "http://127.0.0.1:8000/matches";
+        let url = `http://127.0.0.1:8000/matches?league=${leagueId}`;
         const params = [];
 
-        // Kullanıcı sezon seçtiyse ekle (Seçmediyse parametre gitmez, geçmiş tüm yıllar gelir)
         if (selectedSeason !== "Tüm Sezonlar") {
             params.push(`season=${encodeURIComponent(selectedSeason)}`);
         }
-
-        // Kullanıcı ev sahibi seçtiyse ekle
         if (homeTeam) {
             params.push(`homeTeam=${encodeURIComponent(homeTeam)}`);
         }
-
-        // Kullanıcı deplasman seçtiyse ekle
         if (awayTeam) {
             params.push(`awayTeam=${encodeURIComponent(awayTeam)}`);
         }
 
-        // URL query string oluşturma (?season=2023-2024&homeTeam=Arsenal gibi)
         if (params.length > 0) {
-            url += `?${params.join("&")}`;
+            url += `&${params.join("&")}`; // İlk parametre lig olduğu için & ile bağlıyoruz
         }
 
         fetch(url)
             .then(res => res.json())
             .then(data => {
-                // Backend'den filtrelenmiş olarak gelen tüm maçları doğrudan diziye aktarır
                 setFilteredMatches(Array.isArray(data) ? data : []);
+                setVisibleCount(20);
                 setLoading(false);
             })
             .catch(err => {
@@ -84,8 +99,9 @@ export default function LeaguePage() {
                 {/* BAŞLIK VE SEZON SEÇİMİ */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-800 pb-6">
                     <div>
+                        {/* Lig adına göre dinamik başlık basıyoruz */}
                         <h1 className="text-4xl font-black tracking-tight mt-2 bg-gradient-to-r from-white via-slate-200 to-slate-500 bg-clip-text text-transparent">
-                            Premier League İstasyon Paneli
+                            {leagueTitles[leagueId] || `${leagueId?.toUpperCase()} Paneli`}
                         </h1>
                     </div>
 
@@ -154,8 +170,8 @@ export default function LeaguePage() {
                         Eşleşen müsabaka bulunamadı.
                     </div>
                 ) : (
-                    <div className="space-y-6 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar mb-12">
-                        {filteredMatches.map((m, idx) => {
+                    <div className="space-y-6 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar mb-4">
+                        {filteredMatches.slice(0, visibleCount).map((m, idx) => {
                             const isBtts = m.homeGoals > 0 && m.awayGoals > 0;
                             return (
                                 <div key={idx} className="bg-slate-900/40 border border-slate-800/80 p-4 rounded-2xl shadow-md backdrop-blur-sm">
@@ -186,7 +202,7 @@ export default function LeaguePage() {
                                                 <div className="flex justify-between text-slate-400"><span>Toplam Gol:</span> <span className="font-bold text-slate-200">{Number(m.homeGoals) + Number(m.awayGoals)}</span></div>
                                             </div>
                                             <div className="mt-2 text-center text-[10px] bg-slate-900 py-0.5 rounded font-bold text-blue-400">
-                                                {m.homeGoals > m.awayGoals ? "Ev Sahibi Üstün" : m.awayGoals > m.homeGoals ? "Deplasman Üstün" : "Beraberlik"}
+                                                {m.homeGoals > m.awayGoals ? `Ev Sahibi ( ${m.homeTeam} ) Üstün` : m.awayGoals > m.homeGoals ? `Deplasman ( ${m.awayTeam} ) Üstün` : "Beraberlik"}
                                             </div>
                                         </div>
 
@@ -226,6 +242,17 @@ export default function LeaguePage() {
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {filteredMatches.length > visibleCount && (
+                    <div className="flex justify-center mb-12">
+                        <button
+                            onClick={() => setVisibleCount(prev => prev + 100)}
+                            className="w-full bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold p-4 rounded-2xl border border-slate-800/80 shadow-lg hover:border-slate-700 transition-all text-xs tracking-widest uppercase"
+                        >
+                            👇 DAHA FAZLA MÜSABAKA YÜKLE ({filteredMatches.length - visibleCount} maç gizli)
+                        </button>
                     </div>
                 )}
             </main>

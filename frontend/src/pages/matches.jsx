@@ -1,187 +1,155 @@
 import Navbar from "../components/Navbar";
-import { useEffect, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
-
-const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 p-3 rounded-xl shadow-2xl text-xs font-medium z-50">
-                <p className="text-slate-400 mb-1 font-semibold uppercase tracking-wider">{payload[0].payload.feature}</p>
-                <p className="text-lg font-bold" style={{ color: payload[0].payload.color }}>{payload[0].value}</p>
-            </div>
-        );
-    }
-    return null;
-};
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
 export default function Matches() {
-    const [selectedLeague, setSelectedLeague] = useState("");
-    const [teams, setTeams] = useState([]);
+    const location = useLocation();
+    
+    // Ana sayfadan gelen lig verisi
+    const initialLeague = location.state?.initialLeague || "";
+
+    const [selectedLeague, setSelectedLeague] = useState(initialLeague);
+    const [seasons, setSeasons] = useState([]);
+    const [selectedSeason, setSelectedSeason] = useState("");
     const [matches, setMatches] = useState([]);
-    const [homeTeam, setHomeTeam] = useState("");
-    const [awayTeam, setAwayTeam] = useState("");
     const [loading, setLoading] = useState(false);
-    const [matchIndex, setMatchIndex] = useState(0);
 
-    // 🔗 API BAĞLANTI: Lig seçildiğinde genel takım listesini çeker
+    const baseUrl = "http://127.0.0.1:8000";
+
+    const leagues = [
+        { id: "premier-league", name: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" },
+        { id: "superlig", name: "🇹🇷 Trendyol Süper Lig" },
+        { id: "laliga", name: "🇪🇸 La Liga" },
+        { id: "lig1", name: "🇫🇷 Ligue 1" }
+    ];
+
     useEffect(() => {
-        if (selectedLeague) {
-            fetch("http://127.0.0.1:8000/teams")
-                .then(res => res.json())
-                .then(data => setTeams(data))
-                .catch(err => console.error("Takımlar çekilemedi:", err));
-        } else {
-            setTeams([]);
-            setMatches([]);
+        if (location.state?.initialLeague) {
+            setSelectedLeague(location.state.initialLeague);
         }
-    }, [selectedLeague]);
+    }, [location.state]);
 
-    // 🔗 API BAĞLANTI: Seçilen iki takımın maçlarını çeker ve filtreler
-    const handleShowMatches = () => {
-        if (!homeTeam || !awayTeam) {
-            alert("Lütfen iki takım seçin.");
+    // 1. Sezonları Getir
+    useEffect(() => {
+        if (!selectedLeague) {
+            setSeasons([]);
+            setSelectedSeason("");
+            setMatches([]);
             return;
         }
         setLoading(true);
-        setMatchIndex(0);
-
-        fetch("http://127.0.0.1:8000/matches")
+        fetch(`${baseUrl}/seasons?league=${selectedLeague}`)
             .then(res => res.json())
             .then(data => {
-                const filtered = data.filter(
-                    m => (m.homeTeam === homeTeam && m.awayTeam === awayTeam) ||
-                         (m.homeTeam === awayTeam && m.awayTeam === homeTeam)
-                );
-                setMatches(filtered);
+                setSeasons(Array.isArray(data) ? data : []);
+                setSelectedSeason("");
+                setMatches([]);
                 setLoading(false);
-            })
-            .catch(err => {
-                console.error("Maçlar çekilirken hata:", err);
-                setLoading(false);
-            });
-    };
+            }).catch(() => setLoading(false));
+    }, [selectedLeague]);
 
-    const match = matches?.[matchIndex] || null;
-    const bttsValue = match && match.homeGoals > 0 && match.awayGoals > 0 ? 15 : 0;
-
-    let winner = "Beraberlik";
-    let winnerColor = "text-amber-400 bg-amber-500/10 border-amber-500/20";
-    if (match) {
-        if (match.homeGoals > match.awayGoals) {
-            winner = `${match.homeTeam} Kazandı`;
-            winnerColor = "text-blue-400 bg-blue-500/10 border-blue-500/20";
-        } else if (match.awayGoals > match.homeGoals) {
-            winner = `${match.awayTeam} Kazandı`;
-            winnerColor = "text-red-400 bg-red-500/10 border-red-500/20";
+    // 2. Maçları Getir
+    useEffect(() => {
+        if (!selectedLeague || !selectedSeason) {
+            setMatches([]);
+            return;
         }
-    }
-
-    const chartData = match ? [
-        { feature: "Ev Gol", value: match.homeGoals, color: "#3b82f6" },
-        { feature: "Dep Gol", value: match.awayGoals, color: "#ef4444" },
-        { feature: "Sarı Kart", value: match.yellowCards, color: "#eab308" },
-        { feature: "Kırmızı Kart", value: match.redCards, color: "#f43f5e" },
-        { feature: "Korner", value: match.corners, color: "#10b981" },
-        { feature: "Ofsayt", value: match.offsides, color: "#a855f7" },
-        { feature: "KG Var", value: bttsValue, color: "#06b6d4" }
-    ] : [];
+        setLoading(true);
+        fetch(`${baseUrl}/matches?league=${selectedLeague}&season=${selectedSeason}`)
+            .then(res => res.json())
+            .then(data => {
+                setMatches(Array.isArray(data) ? data : []);
+                setLoading(false);
+            }).catch(() => setLoading(false));
+    }, [selectedSeason, selectedLeague]);
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
             <Navbar />
-            <main className="max-w-6xl mx-auto px-4 py-12">
-                <div className="mb-10 border-b border-slate-800 pb-6">
-                    <h1 className="text-4xl font-black bg-gradient-to-r from-white to-slate-500 bg-clip-text text-transparent">Müsabaka Geçmişi</h1>
-                    <p className="text-sm text-slate-400 mt-1">İki takım arasındaki tüm maçları ve detaylı metrikleri inceleyin.</p>
-                </div>
+            
+            <main className="max-w-7xl mx-auto px-4 py-12">
+                <h1 className="text-4xl font-black mb-8 bg-gradient-to-r from-white to-slate-500 bg-clip-text text-transparent">
+                    Maçlar Veri Paneli
+                </h1>
 
-                <div className="bg-slate-900/40 border border-slate-800/80 p-6 rounded-3xl mb-10 space-y-6">
+                {/* Filtreler */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/40 border border-slate-800 p-6 rounded-3xl mb-10">
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Lig Seçin</label>
-                        <select 
-                            className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer"
-                            value={selectedLeague}
-                            onChange={(e) => { setSelectedLeague(e.target.value); setHomeTeam(""); setAwayTeam(""); }}
-                        >
-                            <option value="">Lig Seçiniz</option>
-                            <option value="Premier League">Premier League</option>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Lig Seçin</label>
+                        <select className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-white outline-none focus:border-blue-500/50" value={selectedLeague} onChange={(e) => setSelectedLeague(e.target.value)}>
+                            <option value="">Seçiniz...</option>
+                            {leagues.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                         </select>
                     </div>
-
-                    {selectedLeague && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Ev Sahibi</label>
-                                <select className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" value={homeTeam} onChange={(e) => setHomeTeam(e.target.value)}>
-                                    <option value="">Takım Seçin</option>
-                                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </div>
-                            <div className="text-center font-bold text-slate-500 pt-6">VS</div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Deplasman</label>
-                                <select className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" value={awayTeam} onChange={(e) => setAwayTeam(e.target.value)}>
-                                    <option value="">Takım Seçin</option>
-                                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedLeague && (
-                        <button onClick={handleShowMatches} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold p-4 rounded-2xl shadow-xl transition-all active:scale-[0.99]">
-                            {loading ? "YÜKLENİYOR..." : "MAÇLARI LİSTELE"}
-                        </button>
-                    )}
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Sezon Seçin</label>
+                        <select className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-white disabled:opacity-40 outline-none focus:border-blue-500/50" value={selectedSeason} disabled={!selectedLeague} onChange={(e) => setSelectedSeason(e.target.value)}>
+                            <option value="">Seçiniz...</option>
+                            {seasons.map(s => <option key={s} value={s}>{s} Sezonu</option>)}
+                        </select>
+                    </div>
                 </div>
 
-                {!match ? (
-                    <div className="border-2 border-dashed border-slate-800 rounded-3xl py-16 text-center text-slate-500">Kayıtlı veri görüntülemek için seçim yapın.</div>
+                {/* Maç Listesi */}
+                {loading ? (
+                    <div className="text-center text-slate-400 py-12">Maçlar Yükleniyor...</div>
                 ) : (
-                    <div className="space-y-8">
-                        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                            <div className="lg:col-span-2 bg-slate-900/60 border border-slate-800 p-6 rounded-3xl flex flex-col justify-between min-h-[400px]">
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Skorboard</span>
-                                <div className="space-y-4 my-auto">
-                                    <div className="flex justify-between items-center bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                                        <span className="font-bold">{match.homeTeam}</span>
-                                        <span className="text-2xl font-black text-blue-400">{match.homeGoals}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                                        <span className="font-bold">{match.awayTeam}</span>
-                                        <span className="text-2xl font-black text-red-400">{match.awayGoals}</span>
-                                    </div>
-                                </div>
-                                <div className={`p-4 border rounded-2xl text-center font-bold ${winnerColor}`}>{winner}</div>
-                            </div>
+                    selectedSeason && (
+                        <div className="grid grid-cols-1 gap-4 max-w-4xl mx-auto">
+                            {matches.length > 0 ? (
+                                matches.map((match, idx) => {
+                                    // Backend veri anahtarlarını esnek şekilde yakala
+                                    const home = match.homeTeam || match.HomeTeam || match.home || "Ev Sahibi";
+                                    const away = match.awayTeam || match.AwayTeam || match.away || "Deplasman";
+                                    const winner = match.winner; // API'den gelen kazanan bilgisi
+                                    
+                                    // Skor formatı kontrolü
+                                    const score = (match.homeGoals !== undefined && match.awayGoals !== undefined) 
+                                            ? `${match.homeGoals} - ${match.awayGoals}` 
+                                            : "vs";
 
-                            <div className="lg:col-span-3 bg-slate-900/60 border border-slate-800 p-6 rounded-3xl h-[400px]">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Maç Metrikleri</h3>
-                                <ResponsiveContainer width="100%" height="90%">
-                                    <BarChart data={chartData}>
-                                        <CartesianGrid stroke="#1e293b" vertical={false} />
-                                        <XAxis dataKey="feature" stroke="#64748b" fontSize={11} />
-                                        <YAxis domain={[0, 15]} stroke="#64748b" fontSize={11} />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                            {chartData.map((entry, idx) => <Cell key={idx} fill={entry.color} />)}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
+                                    // 🎨 DİNAMİK RENKLENDİRME MANTIĞI
+                                    let homeColor = "text-slate-200";
+                                    let awayColor = "text-slate-200";
+
+                                    if (winner) {
+                                        if (winner === home) {
+                                            homeColor = "text-blue-400 font-extrabold";
+                                            awayColor = "text-red-400/80 font-medium";
+                                        } else if (winner === away) {
+                                            awayColor = "text-blue-400 font-extrabold";
+                                            homeColor = "text-red-400/80 font-medium";
+                                        }
+                                    }
+
+                                    return (
+                                        <div key={idx} className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between hover:border-slate-700 hover:bg-slate-900/80 transition shadow-md gap-4">
+                                            {match.date && <div className="text-xs text-slate-500 font-semibold sm:w-28">{match.date}</div>}
+
+                                            {/* Maç Kartı Orta Alanı */}
+                                            <div className="flex items-center justify-center flex-1 w-full gap-4 text-center">
+                                                <div className={`flex-1 text-right text-sm md:text-base truncate transition-colors ${homeColor}`}>
+                                                    {away}
+                                                </div>
+                                                {/* Skor Paneli */}
+                                                <div className="bg-slate-950 px-4 py-2 border border-slate-800 rounded-xl font-mono font-black text-slate-400 min-w-[70px] text-center shadow-inner">
+                                                    {score}
+                                                </div>
+
+                                                <div className={`flex-1 text-left text-sm md:text-base truncate transition-colors ${awayColor}`}>
+                                                    {home}
+                                                </div>
+                                            </div>
+
+                                           
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center text-slate-500 py-12">Bu sezona ait maç kaydı bulunamadı.</div>
+                            )}
                         </div>
-
-                        {matches.length > 1 && (
-                            <div className="flex items-center justify-between bg-slate-900/40 border border-slate-800 p-4 rounded-2xl max-w-md mx-auto">
-                                <button onClick={() => setMatchIndex(p => Math.max(0, p - 1))} disabled={matchIndex === 0} className="p-2 bg-slate-950 border border-slate-800 rounded-xl disabled:opacity-30 text-xs px-4">Geri</button>
-                                <div className="text-center">
-                                    <span className="text-xs font-bold text-slate-400 block">{match.date}</span>
-                                    <span className="text-[10px] uppercase text-slate-600 font-bold">{matchIndex + 1} / {matches.length}</span>
-                                </div>
-                                <button onClick={() => setMatchIndex(p => Math.min(matches.length - 1, p + 1))} disabled={matchIndex === matches.length - 1} className="p-2 bg-slate-950 border border-slate-800 rounded-xl disabled:opacity-30 text-xs px-4">İleri</button>
-                            </div>
-                        )}
-                    </div>
+                    )
                 )}
             </main>
         </div>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
@@ -12,14 +12,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-CSV_PATH = "Premier_League.csv"
+# -----------------------------------
+# LEAGUES
+# -----------------------------------
+CSV_FILES = {
+    "premier-league": "Premier_League.csv",
+    "laliga": "LaLiga.csv",
+    "lig1": "Lig-1.csv",
+    "superlig": "SuperLig.csv",
+}
 
+def load_df(league: str | None = None):
 
-# -------------------------
-# LOAD + CLEAN + SEASON
-# -------------------------
-def load_df():
-    df = pd.read_csv(CSV_PATH)
+    if league:
+        if league not in CSV_FILES:
+            raise HTTPException(
+                status_code=404,
+                detail=f"League '{league}' not found"
+            )
+
+        df = pd.read_csv(CSV_FILES[league])
+
+    else:
+        dfs = []
+
+        for file in CSV_FILES.values():
+            dfs.append(pd.read_csv(file))
+
+        df = pd.concat(dfs, ignore_index=True)
 
     df = df.rename(columns={
         "Maç Tarihi": "date",
@@ -38,45 +58,6 @@ def load_df():
     })
 
     return df
-
-
-# -------------------------
-# HOME
-# -------------------------
-@app.get("/")
-def home():
-    return {"message": "Football API çalışıyor"}
-
-
-# -------------------------
-# SEASONS (ONLY LIST)
-# -------------------------
-@app.get("/seasons")
-def get_seasons():
-    df = load_df()
-
-    df["date"] = pd.to_datetime(
-        df["date"],
-        format="%d.%m.%Y %H:%M",
-        errors="coerce"
-    )
-
-    seasons = set()
-
-    for date in df["date"].dropna():
-        year = date.year
-        month = date.month
-
-        if month >= 8:
-            season = f"{year}-{year+1}"
-        else:
-            season = f"{year-1}-{year}"
-
-        seasons.add(season)
-
-    return sorted(seasons)
-
-
 def add_season(df):
     df["parsed_date"] = pd.to_datetime(
         df["date"],
@@ -94,12 +75,48 @@ def add_season(df):
 
     return df
 # -------------------------
-# TEAMS (OPTIONAL SEASON)
+# HOME
 # -------------------------
-@app.get("/teams")
-def get_teams(season: str | None = None):
+@app.get("/")
+def home():
+    return {"message": "Football API çalışıyor",
+               "availableLeagues": list(CSV_FILES.keys())}
 
-    df = add_season(load_df())
+
+# -------------------------
+# SEASONS (ONLY LIST)
+# -------------------------
+@app.get("/seasons")
+def get_seasons(league: str| None= None):
+
+    df = load_df(league)
+
+    df["date"] = pd.to_datetime(
+        df["date"],
+        format="%d.%m.%Y %H:%M",
+        errors="coerce"
+    )
+
+    seasons = set()
+
+    for date in df["date"].dropna():
+        if date.month >= 8:
+            seasons.add(f"{date.year}-{date.year+1}")
+        else:
+            seasons.add(f"{date.year-1}-{date.year}")
+
+    return sorted(seasons)
+
+
+
+@app.get("/teams")
+def get_teams(
+    league: str | None= None,
+    season: str | None = None
+):
+
+    df = add_season(load_df(league))
+
     if season:
         df = df[df["season"] == season]
 
@@ -110,14 +127,16 @@ def get_teams(season: str | None = None):
     return teams
 
 
-# -------------------------
 @app.get("/matches")
 def get_matches(
+    league: str ,
     season: str | None = None,
     homeTeam: str | None = None,
     awayTeam: str | None = None,
 ):
-    df = add_season(load_df())
+
+    df = add_season(load_df(league))
+
     if season:
         df = df[df["season"] == season]
 

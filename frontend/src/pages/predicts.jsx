@@ -19,12 +19,25 @@ const DotTooltip = ({ active, payload }) => {
 
 export default function Predicts() {
     const [selectedLeague, setSelectedLeague] = useState("");
+    const [seasons, setSeasons] = useState([]);
+    const [selectedSeason, setSelectedSeason] = useState("Tüm Sezonlar");
+    
     const [teams, setTeams] = useState([]);
-    const [matches, setMatches] = useState([]);
     const [homeTeam, setHomeTeam] = useState("");
     const [awayTeam, setAwayTeam] = useState("");
+    
+    const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showTrends, setShowTrends] = useState(false);
+
+    const baseUrl = "http://127.0.0.1:8000";
+
+    const leaguesList = [
+        { id: "premier-league", name: "Premier League" },
+        { id: "superlig", name: "Trendyol Süper Lig" },
+        { id: "laliga", name: "La Liga" },
+        { id: "lig1", name: "Ligue 1" }
+    ];
 
     const generatedColors = {};
     const getColorForSeason = (season) => {
@@ -36,35 +49,72 @@ export default function Predicts() {
         return chosenColor;
     };
 
-    // 🔗 API BAĞLANTI: Takım Listesini Çeker
     useEffect(() => {
-        if (selectedLeague) {
-            fetch("http://127.0.0.1:8000/teams")
-                .then(res => res.json())
-                .then(data => setTeams(data));
+        if (!selectedLeague) {
+            setSeasons([]);
+            setSelectedSeason("Tüm Sezonlar");
+            setTeams([]);
+            setHomeTeam("");
+            setAwayTeam("");
+            setShowTrends(false);
+            return;
         }
+
+        setLoading(true);
+        setSelectedSeason("Tüm Sezonlar");
+        setHomeTeam("");
+        setAwayTeam("");
+        setShowTrends(false);
+
+        Promise.all([
+            fetch(`${baseUrl}/seasons?league=${selectedLeague}`).then(res => res.json()),
+            fetch(`${baseUrl}/teams?league=${selectedLeague}`).then(res => res.json())
+        ]).then(([seasonsData, teamsData]) => {
+            setSeasons(Array.isArray(seasonsData) ? seasonsData : []);
+            setTeams(Array.isArray(teamsData) ? teamsData : []);
+            setLoading(false);
+        }).catch(() => setLoading(false));
     }, [selectedLeague]);
 
-    // 🔗 API BAĞLANTI: Trend Dağılımları İçin Maçları Çeker
     const handleAnalyzeTrends = () => {
         if (!homeTeam || !awayTeam) {
             alert("Lütfen iki takım seçin.");
             return;
         }
+        if (homeTeam === awayTeam) {
+            alert("Ev sahibi ve deplasman takımları aynı olamaz.");
+            return;
+        }
+
         setLoading(true);
-        fetch("http://127.0.0.1:8000/matches")
+        
+        let url = `${baseUrl}/matches?league=${selectedLeague}`;
+        if (selectedSeason !== "Tüm Sezonlar" && selectedSeason) {
+            url += `&season=${encodeURIComponent(selectedSeason)}`;
+        }
+        
+        fetch(url)
             .then(res => res.json())
             .then(data => {
-                const filtered = data.filter(
+                const mutualMatches = Array.isArray(data) ? data.filter(
                     m => (m.homeTeam === homeTeam && m.awayTeam === awayTeam) ||
                          (m.homeTeam === awayTeam && m.awayTeam === homeTeam)
-                );
-                setMatches(filtered);
+                ) : [];
+
+                // Kronolojik sıralama için maçları tarihlerine göre eskiden yeniye sıralıyoruz
+                // (Grafikte tarih sırasının düzgün akması için)
+                const sortedMatches = mutualMatches.sort((a, b) => {
+                    const partsA = a.date.split('.');
+                    const partsB = b.date.split('.');
+                    return new Date(partsA[2], partsA[1] - 1, partsA[0]) - new Date(partsB[2], partsB[1] - 1, partsB[0]);
+                });
+
+                setMatches(sortedMatches);
                 setShowTrends(true);
                 setLoading(false);
             })
             .catch(err => {
-                console.error(err);
+                console.error("Maç dataları çekilirken hata:", err);
                 setLoading(false);
             });
     };
@@ -76,14 +126,8 @@ export default function Predicts() {
 
         matches.forEach(m => {
             if (!m.date) return;
-            const parts = m.date.split('.');
-            let matchYear = new Date().getFullYear();
-            let matchMonth = 1;
-            if (parts.length === 3) {
-                matchMonth = parseInt(parts[1], 10);
-                matchYear = parseInt(parts[2], 10);
-            }
-            let seasonStr = matchMonth >= 8 ? `${matchYear}-${matchYear + 1}` : `${matchYear - 1}-${matchYear}`;
+            
+            const seasonStr = m.season || "Bilinmeyen";
             const color = getColorForSeason(seasonStr);
             const fullLabel = m.homeTeam === homeTeam ? `Evinde vs ${m.awayTeam}` : `Deplasmanda vs ${m.homeTeam}`;
 
@@ -116,79 +160,139 @@ export default function Predicts() {
 
     const { features, averages } = prepareScatterData();
     const scatterConfigs = [
-        { id: "totalGoals", title: "Toplam Gol Dağılım Tablosu", avgKey: "totalGoals", defaultColor: "#3b82f6" },
-        { id: "yellowCards", title: "Toplam Sarı Kart Dağılım Tablosu", avgKey: "yellowCards", defaultColor: "#eab308" },
-        { id: "redCards", title: "Toplam Kırmızı Kart Dağılım Tablosu", avgKey: "redCards", defaultColor: "#f43f5e" },
-        { id: "corners", title: "Toplam Korner Dağılım Tablosu", avgKey: "corners", defaultColor: "#10b981" },
-        { id: "offsides", title: "Toplam Ofsayt Dağılım Tablosu", avgKey: "offsides", defaultColor: "#a855f7" },
+        { id: "totalGoals", title: "Toplam Gol ", avgKey: "totalGoals", defaultColor: "#3b82f6" ,titleaverage:"Gol Ortalaması"},
+        { id: "yellowCards", title: "Toplam Sarı Kart ", avgKey: "yellowCards", defaultColor: "#eab308" ,titleaverage:"Sarı Kart Ortalaması"},
+        { id: "redCards", title: "Toplam Kırmızı Kart ", avgKey: "redCards", defaultColor: "#f43f5e", titleaverage:"Kırmızı Kart Ortalaması"},
+        { id: "corners", title: "Toplam Korner ", avgKey: "corners", defaultColor: "#10b981" ,titleaverage:"Korner Ortalaması"},
+        { id: "offsides", title: "Toplam Ofsayt ", avgKey: "offsides", defaultColor: "#a855f7" ,titleaverage:"Ofsayt Ortalaması"},
     ];
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
             <Navbar />
             <main className="max-w-6xl mx-auto px-4 py-12">
                 <div className="mb-10 border-b border-slate-800 pb-6">
-                    <h1 className="text-4xl font-black text-white">Yapay Zeka & Tahmin Paneli</h1>
-                    <p className="text-sm text-slate-400 mt-1">Kronolojik rekabet trend analizi üzerinden tahmin haritaları.</p>
+                    <h1 className="text-4xl font-black text-white bg-gradient-to-r from-white to-slate-500 bg-clip-text text-transparent">Yapay Zeka & Tahmin Paneli</h1>
+                    <p className="text-sm text-slate-400 mt-1">Olasılık ve kronolojik matris analiz haritaları.</p>
                 </div>
 
-                <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl mb-10 space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Lig</label>
-                        <select className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" value={selectedLeague} onChange={e => setSelectedLeague(e.target.value)}>
-                            <option value="">Seçiniz</option>
-                            <option value="Premier League">Premier League</option>
-                        </select>
+                <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl mb-10 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">1. Lig Seçiniz</label>
+                            <select 
+                                className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer focus:border-indigo-500 transition" 
+                                value={selectedLeague} 
+                                onChange={e => setSelectedLeague(e.target.value)}
+                            >
+                                <option value="">Lig Seçin...</option>
+                                {leaguesList.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">2. Sezon (Opsiyonel)</label>
+                            <select 
+                                className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer focus:border-indigo-500 transition disabled:opacity-40" 
+                                value={selectedSeason} 
+                                disabled={!selectedLeague}
+                                onChange={e => setSelectedSeason(e.target.value)}
+                            >
+                                <option value="Tüm Sezonlar">📅 Tüm Sezonlar (Tüm Rekabet)</option>
+                                {seasons.map(s => <option key={s} value={s}>{s} Sezonu</option>)}
+                            </select>
+                        </div>
                     </div>
 
                     {selectedLeague && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                            <select className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" value={homeTeam} onChange={e => setHomeTeam(e.target.value)}>
-                                <option value="">1. Takım</option>
-                                {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                            <div className="text-center font-bold text-slate-600">X</div>
-                            <select className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" value={awayTeam} onChange={e => setAwayTeam(e.target.value)}>
-                                <option value="">2. Takım</option>
-                                {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center pt-4 border-t border-slate-800/50 animate-in fade-in duration-300">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Ev Sahibi Takım</label>
+                                <select 
+                                    className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer focus:border-indigo-500 transition" 
+                                    value={homeTeam} 
+                                    onChange={e => setHomeTeam(e.target.value)}
+                                >
+                                    <option value="">1. Takım (Ev Sahibi)</option>
+                                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div className="text-center font-black text-slate-600 md:mt-6 text-sm tracking-wider">VS</div>
+                            
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Deplasman Takım</label>
+                                <select 
+                                    className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer focus:border-indigo-500 transition" 
+                                    value={awayTeam} 
+                                    onChange={e => setAwayTeam(e.target.value)}
+                                >
+                                    <option value="">2. Takım (Deplasman)</option>
+                                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
                         </div>
                     )}
 
-                    {selectedLeague && (
-                        <button onClick={handleAnalyzeTrends} disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold p-4 rounded-2xl shadow-xl transition-all active:scale-[0.99]">
+                    {homeTeam && awayTeam && (
+                        <button 
+                            onClick={handleAnalyzeTrends} 
+                            disabled={loading} 
+                            className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold p-4 rounded-2xl shadow-xl transition-all active:scale-[0.99] tracking-wider text-sm disabled:opacity-50"
+                        >
                             {loading ? "MATRİSLER HESAPLANIYOR..." : "TRENDLERİ VE TABLOLARI GÖSTER"}
                         </button>
                     )}
                 </div>
 
-                {showTrends && matches.length > 0 && (
-                    <div className="grid grid-cols-1 gap-8">
-                        {scatterConfigs.map((config) => (
-                            <div key={config.id} className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{config.title}</h4>
-                                <div className="w-full h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <ScatterChart margin={{ top: 10, right: 20, left: -25, bottom: 20 }}>
-                                            <CartesianGrid stroke="#1e293b" />
-                                            <XAxis dataKey="originalDate" stroke="#64748b" fontSize={10} tickLine={false} />
-                                            <YAxis type="number" dataKey="value" stroke="#64748b" fontSize={11} tickLine={false} />
-                                            <Tooltip content={<DotTooltip />} />
-                                            <Scatter data={features[config.id] || []}>
-                                                {(features[config.id] || []).map((entry, idx) => (
-                                                    <Cell key={idx} fill={entry.color} r={7} />
-                                                ))}
-                                            </Scatter>
-                                        </ScatterChart>
-                                    </ResponsiveContainer>
+                {showTrends && (
+                    matches.length === 0 ? (
+                        <div className="bg-slate-900/20 border border-slate-800 py-12 rounded-2xl text-center text-slate-500 text-sm">
+                            Kriterlere uygun geçmiş müsabaka datası bulunamadı.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-8 animate-in fade-in duration-500">
+                            {scatterConfigs.map((config) => (
+                                <div key={config.id} className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between backdrop-blur-sm">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{config.title} ({matches.length} Maç)</h4>
+                                    
+                                    {/* Tarihlerin aşağı kayıp kesilmemesi için grafik altındaki boşluğu (bottom: 35) artırdım */}
+                                    <div className="w-full h-[350px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ScatterChart margin={{ top: 10, right: 20, left: -25, bottom: 35 }}>
+                                                <CartesianGrid stroke="#1e293b" />
+                                                
+                                                {/* 🛠️ ARTIK TÜM TARİHLERİ EKSİKSİZ GÖSTEREN AYARLANDI */}
+                                                <XAxis 
+                                                    dataKey="originalDate" 
+                                                    stroke="#64748b" 
+                                                    fontSize={9} 
+                                                    tickLine={true} 
+                                                    interval={0} // 0: Hiçbir veriyi atlama, hepsini bas
+                                                    angle={-45}  // Yazıları -45 derece eğerek sığdır
+                                                    textAnchor="end" // Eğilen yazıların hizalamasını düzelt
+                                                />
+                                                
+                                                <YAxis type="number" dataKey="value" stroke="#64748b" fontSize={11} tickLine={false} />
+                                                <Tooltip content={<DotTooltip />} />
+                                                <Scatter data={features[config.id] || []}>
+                                                    {(features[config.id] || []).map((entry, idx) => (
+                                                        <Cell key={idx} fill={entry.color} r={7} />
+                                                    ))}
+                                                </Scatter>
+                                            </ScatterChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-between items-center bg-slate-950/40 px-4 py-2.5 rounded-xl">
+                                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                            Tümü Maçlara ait {config.titleaverage}
+                                        </span>
+                                        <span className="text-sm font-bold font-mono" style={{ color: config.defaultColor }}>{averages[config.avgKey]}</span>
+                                    </div>
                                 </div>
-                                <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center bg-slate-950/40 px-4 py-2.5 rounded-xl">
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase">Geçmiş Maç Ortalaması</span>
-                                    <span className="text-sm font-bold" style={{ color: config.defaultColor }}>{averages[config.avgKey]}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )
                 )}
             </main>
         </div>

@@ -2,109 +2,90 @@ import Navbar from "../components/Navbar";
 import { useState, useEffect } from "react";
 
 export default function Teams() {
-    const [league, setLeague] = useState("");
-    const [season, setSeason] = useState("");
-    const [seasonsList, setSeasonsList] = useState([]); // 🚀 API'den gelen sezon dizisi için
+    const [selectedLeague, setSelectedLeague] = useState("");
+    const [seasons, setSeasons] = useState([]);
+    const [selectedSeason, setSelectedSeason] = useState("");
     const [teams, setTeams] = useState([]);
-    const [loadingTeams, setLoadingTeams] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    // 🔗 API BAĞLANTI 1: Lig seçildiğinde doğrudan hazır linkinden sezonları çeker
-    useEffect(() => {
-        if (league) {
-            fetch("http://127.0.0.1:8000/seasons")
-                .then(res => {
-                    if (!res.ok) throw new Error("Sezonlar yüklenemedi");
-                    return res.json();
-                })
-                .then(data => {
-                    setSeasonsList(Array.isArray(data) ? data : []);
-                })
-                .catch(err => {
-                    console.error("Sezonlar çekilirken hata:", err);
-                    setSeasonsList([]);
-                });
-        } else {
-            setSeasonsList([]);
-            setSeason("");
-            setTeams([]);
-        }
-    }, [league]);
+    const baseUrl = "http://127.0.0.1:8000";
 
-    // 🔗 API BAĞLANTI 2: Belirttiğin yeni URL yapısına göre takımları çeker (?season=YYYY-YYYY)
+    const leagues = [
+        { id: "premier-league", name: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" },
+        { id: "superlig", name: "🇹🇷 Trendyol Süper Lig" },
+        { id: "laliga", name: "🇪🇸 La Liga" },
+        { id: "lig1", name: "🇫🇷 Ligue 1" }
+    ];
+
+    // Lig değiştiğinde o ligin sezonlarını getir
     useEffect(() => {
-        if (league && season) {
-            setLoadingTeams(true);
-            fetch(`http://127.0.0.1:8000/teams?season=${season}`)
-                .then(res => {
-                    if (!res.ok) throw new Error("Takım verisi alınamadı");
-                    return res.json();
-                })
-                .then(data => {
-                    setTeams(data);
-                    setLoadingTeams(false);
-                })
-                .catch(err => {
-                    console.error("Takım yükleme hatası:", err);
-                    setTeams([]);
-                    setLoadingTeams(false);
-                });
-        } else {
+        if (!selectedLeague) {
+            setSeasons([]);
+            setSelectedSeason("");
             setTeams([]);
+            return;
         }
-    }, [league, season]);
+        setLoading(true);
+        fetch(`${baseUrl}/seasons?league=${selectedLeague}`)
+            .then(res => res.json())
+            .then(data => {
+                setSeasons(Array.isArray(data) ? data : []);
+                setSelectedSeason("");
+                setTeams([]);
+                setLoading(false);
+            }).catch(() => setLoading(false));
+    }, [selectedLeague]);
+
+    // Sezon değiştiğinde takımları getir
+    useEffect(() => {
+        if (!selectedLeague || !selectedSeason) {
+            setTeams([]);
+            return;
+        }
+        setLoading(true);
+        fetch(`${baseUrl}/teams?league=${selectedLeague}&season=${selectedSeason}`)
+            .then(res => res.json())
+            .then(data => {
+                setTeams(Array.isArray(data) ? data : []);
+                setLoading(false);
+            }).catch(() => setLoading(false));
+    }, [selectedSeason, selectedLeague]);
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
             <Navbar />
-            <main className="max-w-6xl mx-auto px-4 py-12">
-                <div className="mb-10 border-b border-slate-800 pb-6">
-                    <h1 className="text-4xl font-black text-white">Lig Takımları</h1>
-                    <p className="text-sm text-slate-400 mt-1">Sezonlara göre ligde mücadele eden tüm takımların listesi.</p>
-                </div>
+            <main className="max-w-7xl mx-auto px-4 py-12">
+                <h1 className="text-4xl font-black mb-8 bg-gradient-to-r from-white to-slate-500 bg-clip-text text-transparent">Takımlar Veri Paneli</h1>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/40 border border-slate-800 p-6 rounded-3xl mb-10">
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Lig</label>
-                        <select 
-                            className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" 
-                            value={league} 
-                            onChange={e => setLeague(e.target.value)}
-                        >
-                            <option value="">Seçiniz</option>
-                            <option value="Premier League">Premier League</option>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Lig Seçin</label>
+                        <select className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-white" value={selectedLeague} onChange={(e) => setSelectedLeague(e.target.value)}>
+                            <option value="">Seçiniz...</option>
+                            {leagues.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                         </select>
                     </div>
-                    
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Sezon</label>
-                        <select 
-                            className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer" 
-                            value={season} 
-                            onChange={e => setSeason(e.target.value)}
-                            disabled={!league}
-                        >
-                            <option value="">Seçiniz</option>
-                            {seasonsList.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Sezon Seçin</label>
+                        <select className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-white disabled:opacity-40" value={selectedSeason} disabled={!selectedLeague} onChange={(e) => setSelectedSeason(e.target.value)}>
+                            <option value="">Seçiniz...</option>
+                            {seasons.map(s => <option key={s} value={s}>{s} Sezonu</option>)}
                         </select>
                     </div>
                 </div>
 
-                {loadingTeams ? (
-                    <div className="text-center text-slate-400 py-12">Takımlar Yükleniyor...</div>
-                ) : teams.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {teams.map((t, idx) => (
-                            <div key={idx} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl text-center font-semibold text-slate-200 shadow-lg hover:border-slate-700 transition">
-                                {t}
-                            </div>
-                        ))}
-                    </div>
+                {loading ? (
+                    <div className="text-center text-slate-400">Takımlar Yükleniyor...</div>
                 ) : (
-                    <div className="text-center text-slate-500 border border-dashed border-slate-800 py-12 rounded-2xl">
-                        Takımları listelemek için yukarıdan Lig ve Sezon seçimi yapın.
-                    </div>
+                    selectedSeason && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                            {teams.map((team, idx) => (
+                                <div key={idx} className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl text-center font-bold text-slate-200 hover:border-slate-700 hover:bg-slate-900/80 transition shadow-md">
+                                    ⚽ {team}
+                                </div>
+                            ))}
+                        </div>
+                    )
                 )}
             </main>
         </div>
