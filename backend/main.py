@@ -282,15 +282,15 @@ def getSeazonURL(page,LigUrl):
     return seazonURLs
 
 def main():
-    LigList=[#"https://www.flashscore.com.tr/futbol/ingiltere/premier-league/arsiv/",
-             #"https://www.flashscore.com.tr/futbol/turkiye/super-li-g/arsiv/",
-             #"https://www.flashscore.com.tr/futbol/ispanya/laliga/arsiv/"],
-            "https://www.flashscore.com.tr/futbol/fransa/lig-1/arsiv/",
+    LigList=["https://www.flashscore.com.tr/futbol/ingiltere/premier-league/arsiv/",
+             "https://www.flashscore.com.tr/futbol/turkiye/super-li-g/arsiv/",
+             "https://www.flashscore.com.tr/futbol/ispanya/laliga/arsiv/",
+             "https://www.flashscore.com.tr/futbol/fransa/lig-1/arsiv/",
              "https://www.flashscore.com.tr/futbol/almanya/bundesliga/arsiv/",
              "https://www.flashscore.com.tr/futbol/italya/serie-a/arsiv/"]
-    csv_files = [#"Premier_League.csv",
-                 #"SuperLig.csv",
-                #"LaLiga.csv",
+    csv_files = ["Premier_League.csv",
+                 "SuperLig.csv",
+                 "LaLiga.csv",
                  "Lig-1.csv",
                  "BundesLiga.csv",
                  "Serie-A.csv"]
@@ -304,7 +304,7 @@ def main():
                 page = context.new_page()
                 page.route("**/*.{png,jpg,jpeg,gif,webp,svg}", lambda route: route.abort())
                 seazonsUrl=getSeazonURL(page,Lig)
-                for seazonUrl in seazonsUrl[1:2]:
+                for seazonUrl in seazonsUrl[1:13]:
                     matchListURL=getMatchListURL(seazonUrl,page)
                     for matchURL in matchListURL:
                         match=getMatchStatictics(matchURL,page)

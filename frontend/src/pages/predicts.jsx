@@ -1,5 +1,5 @@
 import Navbar from "../components/Navbar";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from "recharts";
 
 const DotTooltip = ({ active, payload }) => {
@@ -20,8 +20,8 @@ const DotTooltip = ({ active, payload }) => {
 export default function Predicts() {
     const [selectedLeague, setSelectedLeague] = useState("");
     const [seasons, setSeasons] = useState([]);
-    const [selectedSeason, setSelectedSeason] = useState("Tüm Sezonlar");
-    
+    const [selectedSeasons, setSelectedSeasons] = useState([]);
+    const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
     const [teams, setTeams] = useState([]);
     const [homeTeam, setHomeTeam] = useState("");
     const [awayTeam, setAwayTeam] = useState("");
@@ -30,13 +30,15 @@ export default function Predicts() {
     const [loading, setLoading] = useState(false);
     const [showTrends, setShowTrends] = useState(false);
 
+    const dropdownRef = useRef(null);
     const baseUrl = "http://127.0.0.1:8000";
 
     const leaguesList = [
         { id: "premier-league", name: "Premier League" },
         { id: "superlig", name: "Trendyol Süper Lig" },
         { id: "laliga", name: "La Liga" },
-        { id: "lig1", name: "Ligue 1" }
+        { id: "lig1", name: "Ligue 1" },
+        { id: "serie-a", name: "Serie A" }
     ];
 
     const generatedColors = {};
@@ -49,10 +51,21 @@ export default function Predicts() {
         return chosenColor;
     };
 
+    // Dropdown dışına tıklandığında menüyü kapatma
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setSeasonDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
     useEffect(() => {
         if (!selectedLeague) {
             setSeasons([]);
-            setSelectedSeason("Tüm Sezonlar");
+            setSelectedSeasons([]);
             setTeams([]);
             setHomeTeam("");
             setAwayTeam("");
@@ -61,7 +74,7 @@ export default function Predicts() {
         }
 
         setLoading(true);
-        setSelectedSeason("Tüm Sezonlar");
+        setSelectedSeasons([]);  
         setHomeTeam("");
         setAwayTeam("");
         setShowTrends(false);
@@ -89,20 +102,27 @@ export default function Predicts() {
         setLoading(true);
         
         let url = `${baseUrl}/matches?league=${selectedLeague}`;
-        if (selectedSeason !== "Tüm Sezonlar" && selectedSeason) {
-            url += `&season=${encodeURIComponent(selectedSeason)}`;
+        if (selectedSeasons.length > 0 && selectedSeasons.length < seasons.length) {
+            url += `&seasons=${encodeURIComponent(selectedSeasons.join(','))}`;
         }
         
         fetch(url)
             .then(res => res.json())
             .then(data => {
-                const mutualMatches = Array.isArray(data) ? data.filter(
+                const rawMatches = Array.isArray(data) ? data : [];
+
+                // 🛠️ DÜZELTME: Backend'e ek olarak frontend tarafında da seçili sezon filtrelemesi yapıyoruz
+                const filteredBySeason = (selectedSeasons.length > 0 && selectedSeasons.length < seasons.length)
+                    ? rawMatches.filter(m => selectedSeasons.includes(m.season))
+                    : rawMatches;
+
+                // Takım eşleşme filtresi
+                const mutualMatches = filteredBySeason.filter(
                     m => (m.homeTeam === homeTeam && m.awayTeam === awayTeam) ||
                          (m.homeTeam === awayTeam && m.awayTeam === homeTeam)
-                ) : [];
+                );
 
-                // Kronolojik sıralama için maçları tarihlerine göre eskiden yeniye sıralıyoruz
-                // (Grafikte tarih sırasının düzgün akması için)
+                // Kronolojik sıralama
                 const sortedMatches = mutualMatches.sort((a, b) => {
                     const partsA = a.date.split('.');
                     const partsB = b.date.split('.');
@@ -129,7 +149,8 @@ export default function Predicts() {
             
             const seasonStr = m.season || "Bilinmeyen";
             const color = getColorForSeason(seasonStr);
-            const fullLabel = m.homeTeam === homeTeam ? `Evinde vs ${m.awayTeam}` : `Deplasmanda vs ${m.homeTeam}`;
+            const fullLabel = m.homeTeam === homeTeam ? `${m.homeTeam} ( Ev ) vs ${m.awayTeam} ( Dep )` : 
+            `${m.awayTeam} ( Dep ) vs ${m.homeTeam} ( Ev )`;
 
             const gVal = (Number(m.homeGoals) || 0) + (Number(m.awayGoals) || 0);
             const yVal = Number(m.yellowCards) || 0;
@@ -144,7 +165,11 @@ export default function Predicts() {
             features.corners.push({ ...baseObject, value: cVal });
             features.offsides.push({ ...baseObject, value: oVal });
 
-            totals.totalGoals += gVal; totals.yellowCards += yVal; totals.redCards += rVal; totals.corners += cVal; totals.offsides += oVal;
+            totals.totalGoals += gVal; 
+            totals.yellowCards += yVal; 
+            totals.redCards += rVal; 
+            totals.corners += cVal; 
+            totals.offsides += oVal;
         });
 
         const len = matches.length;
@@ -192,15 +217,66 @@ export default function Predicts() {
 
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">2. Sezon (Opsiyonel)</label>
-                            <select 
-                                className="w-full p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white outline-none cursor-pointer focus:border-indigo-500 transition disabled:opacity-40" 
-                                value={selectedSeason} 
-                                disabled={!selectedLeague}
-                                onChange={e => setSelectedSeason(e.target.value)}
-                            >
-                                <option value="Tüm Sezonlar">📅 Tüm Sezonlar (Tüm Rekabet)</option>
-                                {seasons.map(s => <option key={s} value={s}>{s} Sezonu</option>)}
-                            </select>
+                            <div className="relative" ref={dropdownRef}>
+                                <button
+                                    type="button"
+                                    disabled={!selectedLeague}
+                                    onClick={() => setSeasonDropdownOpen(prev => !prev)}
+                                    className="w-full min-h-[56px] p-4 bg-slate-950/60 border border-slate-800 rounded-2xl text-white text-left outline-none focus:border-indigo-500 transition disabled:opacity-40"
+                                >
+                                    {selectedSeasons.length === 0 ? (
+                                        <span className="text-slate-500">Sezon seçin...</span>
+                                    ) : selectedSeasons.length === seasons.length ? (
+                                        <span className="text-white">Tüm Sezonlar</span>
+                                    ) : (
+                                        <span className="text-white">{selectedSeasons.length} sezon seçildi</span>
+                                    )}
+                                    <span className="float-right text-slate-400">
+                                        {seasonDropdownOpen ? "▲" : "▼"}
+                                    </span>
+                                </button>
+
+                                {seasonDropdownOpen && selectedLeague && (
+                                    <div className="absolute z-50 mt-2 w-full bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                                        <div className="max-h-60 overflow-y-auto p-2">
+                                            <label className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-900 cursor-pointer border-b border-slate-800 mb-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={seasons.length > 0 && selectedSeasons.length === seasons.length}
+                                                    onChange={() => {
+                                                        if (selectedSeasons.length === seasons.length) {
+                                                            setSelectedSeasons([]);
+                                                        } else {
+                                                            setSelectedSeasons([...seasons]);
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 accent-indigo-500"
+                                                />
+                                                <span className="text-sm font-semibold text-white">Tüm Sezonlar</span>
+                                            </label>
+
+                                            {seasons.map(season => (
+                                                <label key={season} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-900 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedSeasons.includes(season)}
+                                                        onChange={() => {
+                                                            setSelectedSeasons(prev => {
+                                                                if (prev.includes(season)) {
+                                                                    return prev.filter(s => s !== season);
+                                                                }
+                                                                return [...prev, season];
+                                                            });
+                                                        }}
+                                                        className="w-4 h-4 accent-indigo-500"
+                                                    />
+                                                    <span className="text-sm text-slate-300">{season} Sezonu</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -256,23 +332,19 @@ export default function Predicts() {
                                 <div key={config.id} className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between backdrop-blur-sm">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{config.title} ({matches.length} Maç)</h4>
                                     
-                                    {/* Tarihlerin aşağı kayıp kesilmemesi için grafik altındaki boşluğu (bottom: 35) artırdım */}
                                     <div className="w-full h-[350px]">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <ScatterChart margin={{ top: 10, right: 20, left: -25, bottom: 35 }}>
                                                 <CartesianGrid stroke="#1e293b" />
-                                                
-                                                {/* 🛠️ ARTIK TÜM TARİHLERİ EKSİKSİZ GÖSTEREN AYARLANDI */}
                                                 <XAxis 
                                                     dataKey="originalDate" 
                                                     stroke="#64748b" 
                                                     fontSize={9} 
                                                     tickLine={true} 
-                                                    interval={0} // 0: Hiçbir veriyi atlama, hepsini bas
-                                                    angle={-45}  // Yazıları -45 derece eğerek sığdır
-                                                    textAnchor="end" // Eğilen yazıların hizalamasını düzelt
+                                                    interval={0} 
+                                                    angle={-45} 
+                                                    textAnchor="end"
                                                 />
-                                                
                                                 <YAxis type="number" dataKey="value" stroke="#64748b" fontSize={11} tickLine={false} />
                                                 <Tooltip content={<DotTooltip />} />
                                                 <Scatter data={features[config.id] || []}>

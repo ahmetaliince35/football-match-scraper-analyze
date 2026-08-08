@@ -14,7 +14,8 @@ export default function Teams() {
         { id: "premier-league", name: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" },
         { id: "superlig", name: "🇹🇷 Trendyol Süper Lig" },
         { id: "laliga", name: "🇪🇸 La Liga" },
-        { id: "lig1", name: "🇫🇷 Ligue 1" }
+        { id: "lig1", name: "🇫🇷 Ligue 1" },
+        { id: "serie-a", name: "🇮🇹 Serie A" }
     ];
 
     // Lig değiştiğinde o ligin sezonlarını getir

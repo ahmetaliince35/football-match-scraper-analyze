@@ -20,6 +20,7 @@ CSV_FILES = {
     "laliga": "LaLiga.csv",
     "lig1": "Lig-1.csv",
     "superlig": "SuperLig.csv",
+    "serie-a":"Serie-A.csv"
 }
 
 def load_df(league: str | None = None):
@@ -126,30 +127,23 @@ def get_teams(
 
     return teams
 
-
 @app.get("/matches")
 def get_matches(
-    league: str ,
+    league: str,
     season: str | None = None,
-    homeTeam: str | None = None,
-    awayTeam: str | None = None,
+    team: str | None = None,
 ):
-
     df = add_season(load_df(league))
 
+    # Sezon filtresi
     if season:
         df = df[df["season"] == season]
 
-    if homeTeam:
+    # Takım filtresi
+    if team:
         df = df[
-            (df["homeTeam"] == homeTeam) |
-            (df["awayTeam"] == homeTeam)
-        ]
-
-    if awayTeam:
-        df = df[
-            (df["homeTeam"] == awayTeam) |
-            (df["awayTeam"] == awayTeam)
+            (df["homeTeam"] == team) |
+            (df["awayTeam"] == team)
         ]
 
     return df.fillna(0).to_dict("records")

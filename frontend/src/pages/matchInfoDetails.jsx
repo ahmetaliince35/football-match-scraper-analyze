@@ -23,7 +23,8 @@ export default function LeaguePage() {
         "premier-league": "Premier League İstasyon Paneli",
         "super-lig": "Trendyol Süper Lig İstasyon Paneli",
         "la-liga": "La Liga İstasyon Paneli",
-        "serie-a": "Serie A İstasyon Paneli"
+        "serie-a": "Serie A İstasyon Paneli",
+        "lig1": "Ligue 1 İstasyon Paneli"
     };
 
     // 2. ADIM: Her lig değişiminde input filtrelerini sıfırlamak ve yeni ligin verisini çekmek için useEffect bağımlılığına `leagueId` ekledik

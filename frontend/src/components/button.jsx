@@ -2,14 +2,17 @@
     return (
       <button
         className="
-        bg-blue-00
-        hover:bg-blue-500
+        bg-white
+        text-slate-950
+        hover:bg-slate-200
         px-6
         py-3
         rounded-xl
         font-semibold
         transition
-        duration-300"
+        duration-300
+        border-4
+        border-red-500"
       >
         {children}
       </button>
