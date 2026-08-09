@@ -1,8 +1,16 @@
+from pathlib import Path
+import sqlite3
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
+
+
+# -----------------------------------
+# APP
+# -----------------------------------
 
 app = FastAPI(title="Football Data API")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,138 +20,270 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # -----------------------------------
-# LEAGUES
+# DATABASE
 # -----------------------------------
-CSV_FILES = {
-    "premier-league": "Premier_League.csv",
-    "laliga": "LaLiga.csv",
-    "lig1": "Lig-1.csv",
-    "superlig": "SuperLig.csv",
-    "serie-a":"Serie-A.csv"
+
+BASE_DIR = Path(__file__).resolve().parent
+DB_FILE = BASE_DIR / "football.db"
+
+
+LEAGUES = {
+    "premier-league",
+    "laliga",
+    "lig1",
+    "superlig",
+    "serie-a"
 }
 
-def load_df(league: str | None = None):
 
-    if league:
-        if league not in CSV_FILES:
-            raise HTTPException(
-                status_code=404,
-                detail=f"League '{league}' not found"
-            )
+def get_connection():
+    return sqlite3.connect(DB_FILE)
 
-        df = pd.read_csv(CSV_FILES[league])
 
-    else:
-        dfs = []
-
-        for file in CSV_FILES.values():
-            dfs.append(pd.read_csv(file))
-
-        df = pd.concat(dfs, ignore_index=True)
-
-    df = df.rename(columns={
-        "Maç Tarihi": "date",
-        "Ev Sahibi Takım": "homeTeam",
-        "Deplasman Takım": "awayTeam",
-        "Ev Sahibi Gol": "homeGoals",
-        "Deplasman Gol": "awayGoals",
-        "Kazanan": "winner",
-        "Toplam Gol": "totalGoals",
-        "ofsayt": "offsides",
-        "Sarı Kart": "yellowCards",
-        "Kırmızı Kart": "redCards",
-        "Toplam Korner": "corners",
-        "Karşılıklı Gol": "btts",
-        "Kafa Golü": "headerGoal"
-    })
-
-    return df
-def add_season(df):
-    df["parsed_date"] = pd.to_datetime(
-        df["date"],
-        format="%d.%m.%Y %H:%M",
-        errors="coerce"
-    )
-
-    df = df.dropna(subset=["parsed_date"])
-
-    df["season"] = df["parsed_date"].apply(
-        lambda x: f"{x.year}-{x.year + 1}"
-        if x.month >= 8
-        else f"{x.year - 1}-{x.year}"
-    )
-
-    return df
-# -------------------------
+# -----------------------------------
 # HOME
-# -------------------------
+# -----------------------------------
+
 @app.get("/")
 def home():
-    return {"message": "Football API çalışıyor",
-               "availableLeagues": list(CSV_FILES.keys())}
+
+    return {
+        "message": "Football API çalışıyor",
+        "availableLeagues": sorted(LEAGUES)
+    }
 
 
-# -------------------------
-# SEASONS (ONLY LIST)
-# -------------------------
+# -----------------------------------
+# SEASONS
+# -----------------------------------
+
 @app.get("/seasons")
-def get_seasons(league: str| None= None):
+def get_seasons(
+    league: str | None = None
+):
 
-    df = load_df(league)
+    conn = get_connection()
 
-    df["date"] = pd.to_datetime(
-        df["date"],
-        format="%d.%m.%Y %H:%M",
-        errors="coerce"
-    )
+    try:
 
-    seasons = set()
+        if league:
 
-    for date in df["date"].dropna():
-        if date.month >= 8:
-            seasons.add(f"{date.year}-{date.year+1}")
+            if league not in LEAGUES:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"League '{league}' not found"
+                )
+
+            cursor = conn.execute(
+                """
+                SELECT DISTINCT season
+                FROM matches
+                WHERE league = ?
+                AND season IS NOT NULL
+                ORDER BY season
+                """,
+                (league,)
+            )
+
         else:
-            seasons.add(f"{date.year-1}-{date.year}")
 
-    return sorted(seasons)
+            cursor = conn.execute(
+                """
+                SELECT DISTINCT season
+                FROM matches
+                WHERE season IS NOT NULL
+                ORDER BY season
+                """
+            )
+
+        seasons = [
+            row[0]
+            for row in cursor.fetchall()
+        ]
+
+        return seasons
+
+    finally:
+
+        conn.close()
 
 
+# -----------------------------------
+# TEAMS
+# -----------------------------------
 
 @app.get("/teams")
 def get_teams(
-    league: str | None= None,
+    league: str | None = None,
     season: str | None = None
 ):
 
-    df = add_season(load_df(league))
+    conn = get_connection()
 
-    if season:
-        df = df[df["season"] == season]
+    try:
 
-    teams = sorted(
-        set(df["homeTeam"]).union(df["awayTeam"])
-    )
+        conditions = []
+        params = []
 
-    return teams
+        # Lig filtresi
+        if league:
+
+            if league not in LEAGUES:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"League '{league}' not found"
+                )
+
+            conditions.append("league = ?")
+            params.append(league)
+
+        # Sezon filtresi
+        if season:
+
+            conditions.append("season = ?")
+            params.append(season)
+
+        where_clause = ""
+
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+            SELECT homeTeam AS team
+            FROM matches
+            {where_clause}
+
+            UNION
+
+            SELECT awayTeam AS team
+            FROM matches
+            {where_clause}
+
+            ORDER BY team
+        """
+
+        # UNION'daki iki SELECT aynı parametreleri kullanıyor
+        final_params = params + params
+
+        cursor = conn.execute(
+            query,
+            final_params
+        )
+
+        teams = [
+            row[0]
+            for row in cursor.fetchall()
+            if row[0]
+        ]
+
+        return teams
+
+    finally:
+
+        conn.close()
+
+
+# -----------------------------------
+# MATCHES
+# -----------------------------------
 
 @app.get("/matches")
 def get_matches(
     league: str,
     season: str | None = None,
-    team: str | None = None,
+    team: str | None = None
 ):
-    df = add_season(load_df(league))
 
-    # Sezon filtresi
-    if season:
-        df = df[df["season"] == season]
+    if league not in LEAGUES:
 
-    # Takım filtresi
-    if team:
-        df = df[
-            (df["homeTeam"] == team) |
-            (df["awayTeam"] == team)
+        raise HTTPException(
+            status_code=404,
+            detail=f"League '{league}' not found"
+        )
+
+    conn = get_connection()
+
+    try:
+
+        conditions = [
+            "league = ?"
         ]
 
-    return df.fillna(0).to_dict("records")
+        params = [
+            league
+        ]
+
+        # Sezon filtresi
+        if season:
+
+            conditions.append(
+                "season = ?"
+            )
+
+            params.append(
+                season
+            )
+
+        # Takım filtresi
+        if team:
+
+            conditions.append(
+                "(homeTeam = ? OR awayTeam = ?)"
+            )
+
+            params.append(team)
+            params.append(team)
+
+        where_clause = " AND ".join(
+            conditions
+        )
+
+        query = f"""
+            SELECT
+                date,
+                homeTeam,
+                awayTeam,
+                homeGoals,
+                awayGoals,
+                winner,
+                totalGoals,
+                offsides,
+                yellowCards,
+                redCards,
+                corners,
+                btts,
+                headerGoal,
+                league,
+                season
+
+            FROM matches
+
+            WHERE {where_clause}
+
+            ORDER BY date
+        """
+
+        cursor = conn.execute(
+            query,
+            params
+        )
+
+        columns = [
+            description[0]
+            for description in cursor.description
+        ]
+
+        rows = cursor.fetchall()
+
+        matches = [
+            dict(zip(columns, row))
+            for row in rows
+        ]
+
+        return matches
+
+    finally:
+
+        conn.close()

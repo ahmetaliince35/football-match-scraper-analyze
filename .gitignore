@@ -1,5 +1,16 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
-.idea/
+*.py[cod]
+.venv/
+venv/
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3
+
+# CSV data
 *.csv
+
+# Environment
+.env
