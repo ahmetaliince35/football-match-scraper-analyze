@@ -1,52 +1,82 @@
-# Football Match Statistics Web Application
+# ⚽ Football Match Scraper & Analyzer
 
-Bu proje, çeşitli futbol liglerine ait maç istatistiklerini görüntülemek amacıyla geliştirilmiş bir web uygulamasıdır.
+**Football Match Scraper & Analyzer**, futbol maç verilerini otomatik olarak toplayan, işleyen ve kullanıcıya interaktif istatistikler halinde sunan full-stack bir web uygulamasıdır.
 
-Veriler belirli bir spor sitesinden alınarak işlenmiş ve kullanıcıların kolayca görüntüleyebileceği bir arayüz oluşturulmuştur.
+> 🕷️ **Web Scraping** → 🗄️ **PostgreSQL** → ⚡ **FastAPI** → ⚛️ **React**
 
-## Özellikler
+## 🚀 Özellikler
 
-- Farklı liglerdeki maçları listeleme
-- Takımlara göre filtreleme
-- Maç istatistiklerini görüntüleme
-- Grafiklerle verileri gösterme
-- Backend API üzerinden verilere erişim
+* 🏆 Birden fazla lig desteği
+* 📅 Sezon ve takım bazlı filtreleme
+* ⚽ Detaylı maç istatistikleri
+* 📊 İnteraktif veri görselleştirme
+* 🔎 Maç filtreleme ve arama
+* 🟨 Sarı / 🟥 kırmızı kart istatistikleri
+* 🚩 Korner ve ofsayt istatistikleri
+* 🤝 Karşılıklı gol analizi
+* 🌐 REST API
 
-## Kullanılan Teknolojiler
+## 🛠️ Kullanılan Teknolojiler
 
-### Frontend
+**Backend**
 
-- React
-- Vite
-- Tailwind CSS
-- Recharts
-- Axios
+* Python
+* FastAPI
+* Playwright
+* PostgreSQL
+* Pandas
+* SQLAlchemy
 
-### Backend
+**Frontend**
 
-- FastAPI
-- Pandas
+* React
+* Vite
+* Tailwind CSS
+* Recharts
+* React Router
 
-## Proje Yapısı
+## 🏗️ Proje Mimarisi
 
+```text
+Futbol Veri Kaynağı
+       ↓
+Playwright Web Scraper
+       ↓
+PostgreSQL Veritabanı
+       ↓
+FastAPI REST API
+       ↓
+React + Vite
+       ↓
+İnteraktif İstatistik Paneli
 ```
-Frontend (React)
-        │
-        ▼
-Backend API (FastAPI)
-        │
-        ▼
-CSV Dosyaları (Maç Verileri)
+
+## 📁 Proje Yapısı
+
+```text
+├── backend/
+│   ├── main.py          # Web scraping
+│   ├── backendmain.py   # FastAPI API
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   └── pages/
+│   └── package.json
+│
+└── README.md
 ```
 
-## Çalıştırma
+## ⚡ Kurulum
 
 ### Backend
 
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload
+playwright install
+uvicorn backendmain:app --reload
 ```
 
 ### Frontend
@@ -57,6 +87,10 @@ npm install
 npm run dev
 ```
 
-## Amaç
+## 🎯 Proje Hakkında
 
-Bu proje, web geliştirme, API kullanımı ve veri görselleştirme konularında deneyim kazanmak amacıyla geliştirilmiştir.
+Bu proje; **web scraping, veri işleme, REST API geliştirme, veritabanı yönetimi ve modern web teknolojileri** kullanılarak futbol verilerinin analiz edilebilmesi amacıyla geliştirilmiştir.
+
+---
+
+**Python 🐍 • React ⚛️ • FastAPI ⚡ • PostgreSQL 🗄️**
