@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException,Query
 from fastapi.middleware.cors import CORSMiddleware
 
 # -----------------------------------
@@ -185,11 +185,12 @@ def get_teams(league: str | None = None, season: str | None = None):
 # -----------------------------------
 # MATCHES
 # -----------------------------------
-
-
 @app.get("/matches")
 def get_matches(
-    league: str, season: str | None = None , seasons: list[str]| None = None, team: str | None = None
+    league: str,
+    season: str | None = None,
+    seasons: list[str] | None = Query(None),  # Explicit Query tanımı yapıldı
+    team: str | None = None,
 ):
     if league not in LEAGUES:
         raise HTTPException(
@@ -202,49 +203,57 @@ def get_matches(
         conditions = ['"lig_code" = %s']
         params = [league]
 
-            # 1. Sezon Filtresi
+        # -----------------------------
+        # ÇOKLU SEZON (seasons parametresi dolu gelirse)
+        # -----------------------------
         if seasons:
             season_conditions = []
 
             for s in seasons:
-                try:
-                    start_year, end_year = map(int, s.split("-"))
-                except ValueError:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Geçersiz sezon formatı: {s}"
+                # Virgülle ayrılmış gelme ihtimaline karşı temizleme
+                for sub_season in s.split(","):
+                    sub_season = sub_season.strip()
+                    if not sub_season:
+                        continue
+
+                    try:
+                        start_year, end_year = map(
+                            int, sub_season.split("-")
+                        )
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Geçersiz sezon formatı: {sub_season}",
+                        )
+
+                    season_conditions.append(
+                        '("Maç Tarihi" >= %s AND "Maç Tarihi" < %s)'
                     )
-                start_date = f"{start_year}-08-01 00:00:00"
-                end_date = f"{end_year}-08-01 00:00:00"
-                season_conditions.append(
-                    '"Maç Tarihi" >= %s::timestamp AND "Maç Tarihi" < %s::timestamp'
-                )
 
-                params.extend([start_date, end_date])
+                    params.append(datetime(start_year, 8, 1))
+                    params.append(datetime(end_year, 8, 1))
 
-            conditions.append(
-                "(" + " OR ".join(season_conditions) + ")"
-            )
+            if season_conditions:
+                conditions.append("(" + " OR ".join(season_conditions) + ")")
 
+        # -----------------------------
+        # TEK SEZON (seasons yoksa ama season varsa)
+        # -----------------------------
         elif season:
             try:
                 start_year, end_year = map(int, season.split("-"))
             except ValueError:
                 raise HTTPException(
-                    status_code=400,
-                    detail="Sezon formatı 2016-2017 olmalı."
+                    status_code=400, detail="Sezon formatı 2016-2017 olmalı."
                 )
 
-            start_date = f"{start_year}-08-01 00:00:00"
-            end_date = f"{end_year}-08-01 00:00:00"
+            conditions.append('"Maç Tarihi" >= %s AND "Maç Tarihi" < %s')
+            params.append(datetime(start_year, 8, 1))
+            params.append(datetime(end_year, 8, 1))
 
-            conditions.append(
-                '"Maç Tarihi" >= %s::timestamp AND "Maç Tarihi" < %s::timestamp'
-            )
-
-            params.extend([start_date, end_date])
-
-        # 2. Takım Filtresi
+        # -----------------------------
+        # TAKIM
+        # -----------------------------
         if team:
             conditions.append(
                 '("Ev Sahibi Takım" = %s OR "Deplasman Takım" = %s)'
@@ -273,8 +282,10 @@ def get_matches(
             WHERE {where_clause}
             ORDER BY "Maç Tarihi" ASC
         """
+
         cursor = conn.cursor()
-        print("--- ÇALIŞTIRILAN SQL ---")
+
+        print("--- ÜRETİLEN SQL ---")
         print(query)
         print("--- PARAMETRELER ---")
         print(params)
@@ -282,27 +293,25 @@ def get_matches(
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-        print(f"--- DÖNEN SATIR SAYISI: {len(rows)} ---")
-        cursor.execute(query, params)
-
         columns = [description[0] for description in cursor.description]
-        rows = cursor.fetchall()
-
         matches = []
+
         for row in rows:
             match = dict(zip(columns, row))
+            match_date = match["date"]
 
-            # Timestamp alanını JSON uyumlu string formata ("DD.MM.YYYY HH:MM") dönüştürüyoruz
-            if isinstance(match["date"], (datetime, date)):
-                match["date"] = match["date"].strftime(
-                    "%d.%m.%Y %H:%M"
-                )
+            if isinstance(match_date, (datetime, date)):
+                if match_date.month >= 8:
+                    season_start = match_date.year
+                else:
+                    season_start = match_date.year - 1
 
-            if season:
-                match["season"] = season
+                match["season"] = f"{season_start}-{season_start + 1}"
+                match["date"] = match_date.strftime("%d.%m.%Y %H:%M")
 
             matches.append(match)
 
+        print(f"--- DÖNEN MAÇ SAYISI: {len(matches)} ---")
         return matches
 
     finally:

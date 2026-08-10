@@ -1,23 +1,26 @@
 import Navbar from "../components/Navbar";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from "recharts";
 
 const DotTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
-            <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 p-2.5 rounded-xl text-xs font-semibold z-50">
-                <p className="text-slate-400 uppercase tracking-wider text-[10px] mb-0.5">{data.season} Sezonu</p>
-                <p className="text-slate-200 text-[11px] mb-1.5">{data.originalDate}</p>
-                <p className="text-slate-300 text-[11px] mb-1.5">{data.label}</p>
-                <p className="text-base font-bold" style={{ color: data.color }}>Değer: {data.value}</p>
+            <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 p-3 rounded-xl text-xs font-semibold z-50 shadow-2xl">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white uppercase tracking-wider" style={{ backgroundColor: data.color }}>
+                        {data.season} SEZONU
+                    </span>
+                    <span className="text-slate-400 text-[10px]">{data.originalDate}</span>
+                </div>
+                <p className="text-slate-200 text-[12px] my-1 font-bold">{data.label}</p>
+                <p className="text-sm font-extrabold mt-1" style={{ color: data.color }}>Değer: {data.value}</p>
             </div>
         );
     }
     return null;
 };
 
-// Renk paleti
 const SEASON_COLORS = ["#3b82f6", "#10b981", "#eab308", "#f43f5e", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
 
 export default function Predicts() {
@@ -44,14 +47,13 @@ export default function Predicts() {
         { id: "serie_a", name: "Serie A" }
     ];
 
-    // Sezon bazlı sabit renk haritası oluşturma (Her sezon listesindeki sıraya göre dinamik renk atar)
-    const getSeasonColor = (seasonStr) => {
+    const getSeasonColor = useCallback((seasonStr) => {
         const index = seasons.indexOf(seasonStr);
         if (index !== -1) {
             return SEASON_COLORS[index % SEASON_COLORS.length];
         }
-        return "#3b82f6"; // Varsayılan renk
-    };
+        return "#3b82f6";
+    }, [seasons]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -70,6 +72,7 @@ export default function Predicts() {
             setTeams([]);
             setHomeTeam("");
             setAwayTeam("");
+            setMatches([]);
             setShowTrends(false);
             return;
         }
@@ -78,56 +81,85 @@ export default function Predicts() {
         setSelectedSeasons([]);  
         setHomeTeam("");
         setAwayTeam("");
+        setMatches([]);
         setShowTrends(false);
 
         Promise.all([
             fetch(`${baseUrl}/seasons?league=${selectedLeague}`).then(res => res.json()),
             fetch(`${baseUrl}/teams?league=${selectedLeague}`).then(res => res.json())
         ]).then(([seasonsData, teamsData]) => {
-            setSeasons(Array.isArray(seasonsData) ? seasonsData : []);
+            const rawSeasons = Array.isArray(seasonsData) ? seasonsData.map(String) : [];
+            setSeasons(rawSeasons);
             setTeams(Array.isArray(teamsData) ? teamsData : []);
             setLoading(false);
-        }).catch(() => setLoading(false));
+        }).catch((err) => {
+            console.error("Lig detayları çekilirken hata oluştu:", err);
+            setLoading(false);
+        });
     }, [selectedLeague]);
 
-    const handleAnalyzeTrends = () => {
-        if (!homeTeam || !awayTeam) {
-            alert("Lütfen iki takım seçin.");
-            return;
-        }
-        if (homeTeam === awayTeam) {
-            alert("Ev sahibi ve deplasman takımları aynı olamaz.");
-            return;
-        }
+    const parseDate = (dateStr) => {
+        if (!dateStr) return new Date(0);
+        const mainPart = dateStr.split(" ")[0];
+        const parts = mainPart.split(".");
+        if (parts.length !== 3) return new Date(dateStr);
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    };
 
-        setLoading(true);
-       
-        let url = `${baseUrl}/matches?league=${selectedLeague}`;
-
-if (selectedSeasons.length > 0) {
-    selectedSeasons.forEach(season => {
-        url += `&seasons=${encodeURIComponent(season)}`;
-    });
-}
+    // Tarihten Sezon Hesabı Yapan Yardımcı Fonksiyon (Fallback Güvencesi)
+    const calculateSeasonFromDate = (dateStr) => {
+        if (!dateStr) return "Bilinmeyen";
+        const dateObj = parseDate(dateStr);
+        const month = dateObj.getMonth() + 1;
+        const year = dateObj.getFullYear();
+        if (isNaN(year)) return "Bilinmeyen";
         
+        const startYear = month >= 8 ? year : year - 1;
+        return `${startYear}-${startYear + 1}`;
+    };
+
+    const handleAnalyzeTrends = () => {
+        setLoading(true);
+
+        const params = new URLSearchParams();
+        params.append("league", selectedLeague);
+
+        const isAllSelected = selectedSeasons.length === seasons.length;
+        const isNoneSelected = selectedSeasons.length === 0;
+
+        if (!isAllSelected && !isNoneSelected) {
+            selectedSeasons.forEach(season => {
+                params.append("seasons", String(season));
+            });
+        }
+
+        const url = `${baseUrl}/matches?${params.toString()}`;
+
         fetch(url)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
             .then(data => {
-                const rawMatches = Array.isArray(data) ? data : [];
+                let matchesData = Array.isArray(data) ? data : [];
 
-            
-                // Takım eşleşme filtresi
-                const mutualMatches = filteredBySeason.filter(
-                    m => (m.homeTeam === homeTeam && m.awayTeam === awayTeam) ||
-                         (m.homeTeam === awayTeam && m.awayTeam === homeTeam)
-                );
+                if (homeTeam && awayTeam) {
+                    const cleanHome = homeTeam.trim().toLowerCase();
+                    const cleanAway = awayTeam.trim().toLowerCase();
 
-                // Kronolojik sıralama
-                const sortedMatches = mutualMatches.sort((a, b) => {
-                    const partsA = a.date.split('.');
-                    const partsB = b.date.split('.');
-                    return new Date(partsA[2], partsA[1] - 1, partsA[0]) - new Date(partsB[2], partsB[1] - 1, partsB[0]);
-                });
+                    matchesData = matchesData.filter(m => {
+                        if (!m.homeTeam || !m.awayTeam) return false;
+                        const mHome = m.homeTeam.trim().toLowerCase();
+                        const mAway = m.awayTeam.trim().toLowerCase();
+
+                        return (
+                            (mHome === cleanHome && mAway === cleanAway) ||
+                            (mHome === cleanAway && mAway === cleanHome)
+                        );
+                    });
+                }
+
+                const sortedMatches = matchesData.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
                 setMatches(sortedMatches);
                 setShowTrends(true);
@@ -135,25 +167,26 @@ if (selectedSeasons.length > 0) {
             })
             .catch(err => {
                 console.error("Maç dataları çekilirken hata:", err);
+                setMatches([]);
+                setShowTrends(true);
                 setLoading(false);
             });
     };
 
-    const prepareScatterData = () => {
+    const { features, averages } = useMemo(() => {
         if (!matches || matches.length === 0) return { features: {}, averages: {} };
-        const features = { totalGoals: [], yellowCards: [], redCards: [], corners: [], offsides: [] };
+
+        const feat = { totalGoals: [], yellowCards: [], redCards: [], corners: [], offsides: [] };
         const totals = { totalGoals: 0, yellowCards: 0, redCards: 0, corners: 0, offsides: 0 };
 
-        matches.forEach(m => {
+        matches.forEach((m, idx) => {
             if (!m.date) return;
             
-            const seasonStr = m.season || "Bilinmeyen";
-            // 🔴 Her sezon string'i (örn: "2022-2023") doğrudan renk indeksine yönlendirilir
+            // Backend'den season gelmiyorsa tarihten hesapla
+            const seasonStr = m.season || calculateSeasonFromDate(m.date);
             const color = getSeasonColor(seasonStr);
 
-            const fullLabel = m.homeTeam === homeTeam 
-                ? `${m.homeTeam} ( Ev ) vs ${m.awayTeam} ( Dep )` 
-                : `${m.awayTeam} ( Dep ) vs ${m.homeTeam} ( Ev )`;
+            const fullLabel = `${m.homeTeam} (Ev) vs ${m.awayTeam} (Dep)`;
 
             const gVal = (Number(m.homeGoals) || 0) + (Number(m.awayGoals) || 0);
             const yVal = Number(m.yellowCards) || 0;
@@ -161,12 +194,19 @@ if (selectedSeasons.length > 0) {
             const cVal = Number(m.corners) || 0;
             const oVal = Number(m.offsides) || 0;
 
-            const baseObject = { originalDate: m.date, season: seasonStr, label: fullLabel, color };
-            features.totalGoals.push({ ...baseObject, value: gVal });
-            features.yellowCards.push({ ...baseObject, value: yVal });
-            features.redCards.push({ ...baseObject, value: rVal });
-            features.corners.push({ ...baseObject, value: cVal });
-            features.offsides.push({ ...baseObject, value: oVal });
+            const baseObject = { 
+                id: `m-${idx}-${m.date}`, 
+                originalDate: m.date, 
+                season: seasonStr, 
+                label: fullLabel, 
+                color 
+            };
+            
+            feat.totalGoals.push({ ...baseObject, value: gVal });
+            feat.yellowCards.push({ ...baseObject, value: yVal });
+            feat.redCards.push({ ...baseObject, value: rVal });
+            feat.corners.push({ ...baseObject, value: cVal });
+            feat.offsides.push({ ...baseObject, value: oVal });
 
             totals.totalGoals += gVal; 
             totals.yellowCards += yVal; 
@@ -176,23 +216,23 @@ if (selectedSeasons.length > 0) {
         });
 
         const len = matches.length;
-        const averages = {
+        const avg = {
             totalGoals: (totals.totalGoals / len).toFixed(2),
             yellowCards: (totals.yellowCards / len).toFixed(2),
             redCards: (totals.redCards / len).toFixed(2),
             corners: (totals.corners / len).toFixed(2),
             offsides: (totals.offsides / len).toFixed(2),
         };
-        return { features, averages };
-    };
 
-    const { features, averages } = prepareScatterData();
+        return { features: feat, averages: avg };
+    }, [matches, getSeasonColor]);
+
     const scatterConfigs = [
-        { id: "totalGoals", title: "Toplam Gol ", avgKey: "totalGoals", defaultColor: "#3b82f6" ,titleaverage:"Gol Ortalaması"},
-        { id: "yellowCards", title: "Toplam Sarı Kart ", avgKey: "yellowCards", defaultColor: "#eab308" ,titleaverage:"Sarı Kart Ortalaması"},
-        { id: "redCards", title: "Toplam Kırmızı Kart ", avgKey: "redCards", defaultColor: "#f43f5e", titleaverage:"Kırmızı Kart Ortalaması"},
-        { id: "corners", title: "Toplam Korner ", avgKey: "corners", defaultColor: "#10b981" ,titleaverage:"Korner Ortalaması"},
-        { id: "offsides", title: "Toplam Ofsayt ", avgKey: "offsides", defaultColor: "#a855f7" ,titleaverage:"Ofsayt Ortalaması"},
+        { id: "totalGoals", title: "Toplam Gol", avgKey: "totalGoals", defaultColor: "#3b82f6", titleaverage: "Gol Ortalaması" },
+        { id: "yellowCards", title: "Toplam Sarı Kart", avgKey: "yellowCards", defaultColor: "#eab308", titleaverage: "Sarı Kart Ortalaması" },
+        { id: "redCards", title: "Toplam Kırmızı Kart", avgKey: "redCards", defaultColor: "#f43f5e", titleaverage: "Kırmızı Kart Ortalaması" },
+        { id: "corners", title: "Toplam Korner", avgKey: "corners", defaultColor: "#10b981", titleaverage: "Korner Ortalaması" },
+        { id: "offsides", title: "Toplam Ofsayt", avgKey: "offsides", defaultColor: "#a855f7", titleaverage: "Ofsayt Ortalaması" },
     ];
 
     return (
@@ -246,11 +286,11 @@ if (selectedSeasons.length > 0) {
                                                 <input
                                                     type="checkbox"
                                                     checked={seasons.length > 0 && selectedSeasons.length === seasons.length}
-                                                    onChange={() => {
-                                                        if (selectedSeasons.length === seasons.length) {
-                                                            setSelectedSeasons([]);
-                                                        } else {
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
                                                             setSelectedSeasons([...seasons]);
+                                                        } else {
+                                                            setSelectedSeasons([]);
                                                         }
                                                     }}
                                                     className="w-4 h-4 accent-indigo-500"
@@ -258,24 +298,27 @@ if (selectedSeasons.length > 0) {
                                                 <span className="text-sm font-semibold text-white">Tüm Sezonlar</span>
                                             </label>
 
-                                            {seasons.map(season => (
-                                                <label key={season} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-900 cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedSeasons.includes(season)}
-                                                        onChange={() => {
-                                                            setSelectedSeasons(prev => {
-                                                                if (prev.includes(season)) {
-                                                                    return prev.filter(s => s !== season);
-                                                                }
-                                                                return [...prev, season];
-                                                            });
-                                                        }}
-                                                        className="w-4 h-4 accent-indigo-500"
-                                                    />
-                                                    <span className="text-sm text-slate-300">{season} Sezonu</span>
-                                                </label>
-                                            ))}
+                                            {seasons.map(season => {
+                                                const seasonStr = String(season);
+                                                return (
+                                                    <label key={seasonStr} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-900 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedSeasons.includes(seasonStr)}
+                                                            onChange={() => {
+                                                                setSelectedSeasons(prev => {
+                                                                    if (prev.includes(seasonStr)) {
+                                                                        return prev.filter(s => s !== seasonStr);
+                                                                    }
+                                                                    return [...prev, seasonStr];
+                                                                });
+                                                            }}
+                                                            className="w-4 h-4 accent-indigo-500"
+                                                        />
+                                                        <span className="text-sm text-slate-300">{seasonStr} Sezonu</span>
+                                                    </label>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -293,7 +336,7 @@ if (selectedSeasons.length > 0) {
                                     onChange={e => setHomeTeam(e.target.value)}
                                 >
                                     <option value="">1. Takım (Ev Sahibi)</option>
-                                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {teams.map(t => <option key={`home-${t}`} value={t} disabled={t === awayTeam}>{t}</option>)}
                                 </select>
                             </div>
                             
@@ -307,7 +350,7 @@ if (selectedSeasons.length > 0) {
                                     onChange={e => setAwayTeam(e.target.value)}
                                 >
                                     <option value="">2. Takım (Deplasman)</option>
-                                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {teams.map(t => <option key={`away-${t}`} value={t} disabled={t === homeTeam}>{t}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -342,6 +385,7 @@ if (selectedSeasons.length > 0) {
                                                 <XAxis 
                                                     type="category"
                                                     dataKey="originalDate" 
+                                                    allowDuplicatedCategory={false}
                                                     stroke="#64748b" 
                                                     fontSize={9} 
                                                     tickLine={true} 
@@ -352,8 +396,8 @@ if (selectedSeasons.length > 0) {
                                                 <YAxis type="number" dataKey="value" stroke="#64748b" fontSize={11} tickLine={false} />
                                                 <Tooltip content={<DotTooltip />} />
                                                 <Scatter data={features[config.id] || []}>
-                                                    {(features[config.id] || []).map((entry, idx) => (
-                                                        <Cell key={`cell-${idx}`} fill={entry.color} r={7} />
+                                                    {(features[config.id] || []).map((entry) => (
+                                                        <Cell key={entry.id} fill={entry.color} r={7} />
                                                     ))}
                                                 </Scatter>
                                             </ScatterChart>
@@ -361,7 +405,7 @@ if (selectedSeasons.length > 0) {
                                     </div>
                                     <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-between items-center bg-slate-950/40 px-4 py-2.5 rounded-xl">
                                         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                            Tümü Maçlara ait {config.titleaverage}
+                                            Tüm Maçlara ait {config.titleaverage}
                                         </span>
                                         <span className="text-sm font-bold font-mono" style={{ color: config.defaultColor }}>{averages[config.avgKey]}</span>
                                     </div>
