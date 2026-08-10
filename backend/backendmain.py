@@ -42,7 +42,7 @@ LEAGUES = {
     "premier_league",
     "la_liga",
     "serie_a",
-    "bundesliga",
+    "lig1_a",
 }
 
 
@@ -230,25 +230,24 @@ def get_matches(
 
         query = f"""
             SELECT
-                "Maç Tarihi",
-                "Ev Sahibi Takım",
-                "Deplasman Takım",
-                "Ev Sahibi Gol",
-                "Deplasman Gol",
-                "Kazanan",
-                "Toplam Gol",
-                "ofsayt",
-                "Sarı Kart",
-                "Kırmızı Kart",
-                "Toplam Korner",
-                "Karşılıklı Gol",
-                "Kafa Golü",
-                "lig_code"
+                "Maç Tarihi" AS date,
+                "Ev Sahibi Takım" AS "homeTeam",
+                "Deplasman Takım" AS "awayTeam",
+                "Ev Sahibi Gol" AS "homeGoals",
+                "Deplasman Gol" AS "awayGoals",
+                "Kazanan" AS winner,
+                "Toplam Gol" AS "totalGoals",
+                "ofsayt" AS offsides,
+                "Sarı Kart" AS "yellowCards",
+                "Kırmızı Kart" AS "redCards",
+                "Toplam Korner" AS corners,
+                "Karşılıklı Gol" AS btts,
+                "Kafa Golü" AS "headerGoal",
+                "lig_code" AS league
             FROM matches
             WHERE {where_clause}
             ORDER BY "Maç Tarihi" ASC
         """
-
         cursor = conn.cursor()
         print("--- ÇALIŞTIRILAN SQL ---")
         print(query)
@@ -269,8 +268,8 @@ def get_matches(
             match = dict(zip(columns, row))
 
             # Timestamp alanını JSON uyumlu string formata ("DD.MM.YYYY HH:MM") dönüştürüyoruz
-            if isinstance(match["Maç Tarihi"], (datetime, date)):
-                match["Maç Tarihi"] = match["Maç Tarihi"].strftime(
+            if isinstance(match["date"], (datetime, date)):
+                match["date"] = match["date"].strftime(
                     "%d.%m.%Y %H:%M"
                 )
 

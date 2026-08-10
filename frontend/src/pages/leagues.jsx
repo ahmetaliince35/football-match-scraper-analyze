@@ -14,11 +14,11 @@ export default function Leagues() {
   const [leagueStats, setLeagueStats] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
 
-  const baseUrl = "http://127.0.0.1:8000";
+  const baseUrl = "https://football-backend-bz0d.onrender.com";
 
   const leagues = [
     { 
-      id: "premier-league", 
+      id: "premier_league", 
       name: "Premier League", 
       bgColor: "bg-purple-950/20",
       borderColor: "border-purple-900/50 hover:border-purple-500",
@@ -26,7 +26,7 @@ export default function Leagues() {
       glowColor: "hover:shadow-purple-500/20"
     },
     { 
-      id: "superlig", 
+      id: "super_lig", 
       name: "Trendyol Süper Lig", 
       bgColor: "bg-red-950/20",
       borderColor: "border-red-900/50 hover:border-red-500",
@@ -34,7 +34,7 @@ export default function Leagues() {
       glowColor: "hover:shadow-red-500/20"
     },
     { 
-      id: "laliga", 
+      id: "la_liga", 
       name: "La Liga", 
       bgColor: "bg-amber-950/20",
       borderColor: "border-amber-900/50 hover:border-amber-500",
@@ -50,7 +50,7 @@ export default function Leagues() {
       glowColor: "hover:shadow-blue-500/20"
     },
     { 
-      id: "serie-a", 
+      id: "serie_a", 
       name: "Serie A", 
       bgColor: "bg-green-950/20",
       borderColor: "border-green-900/50 hover:border-green-500",

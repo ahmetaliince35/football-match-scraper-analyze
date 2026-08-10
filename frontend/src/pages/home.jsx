@@ -3,15 +3,15 @@ import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 // FastAPI Backend URL'in (port farklıysa burayı güncelle)
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "https://football-backend-bz0d.onrender.com";
 
 export default function Home() {
   // 1. STATE MİMARİSİ
   const [leagues] = useState([
-    { id: "superlig", name: "Trendyol Süper Lig" },
-    { id: "premier-league", name: "Premier League" },
-    { id: "laliga", name: "La Liga" },
-    { id: "serie-a", name: "Serie A" },
+    { id: "super_lig", name: "Trendyol Süper Lig" },
+    { id: "premier_league", name: "Premier League" },
+    { id: "la_liga", name: "La Liga" },
+    { id: "serie_a", name: "Serie A" },
     { id: "lig1", name: "Ligue 1" },
   ]);
 

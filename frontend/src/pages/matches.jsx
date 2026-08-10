@@ -15,14 +15,14 @@ export default function Matches() {
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const baseUrl = "http://127.0.0.1:8000";
+    const baseUrl = "https://football-backend-bz0d.onrender.com";
 
     const leagues = [
-        { id: "premier-league", name: "Premier League" },
-        { id: "superlig", name: "Trendyol Süper Lig" },
+        { id: "premier_league", name: "Premier League" },
+        { id: "super_lig", name: "Trendyol Süper Lig" },
         { id: "laliga", name: "La Liga" },
         { id: "lig1", name: "Ligue 1" },
-        { id: "serie-a", name: "Serie A" }
+        { id: "serie_a", name: "Serie A" }
     ];
 
     // Ana sayfadan gelen ligi ayarla

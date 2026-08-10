@@ -20,10 +20,10 @@ export default function LeaguePage() {
 
     // Lig id'lerine göre ekranda düzgün başlık göstermek için bir sözlük (Dictionary)
     const leagueTitles = {
-        "premier-league": "Premier League İstasyon Paneli",
-        "super-lig": "Trendyol Süper Lig İstasyon Paneli",
-        "la-liga": "La Liga İstasyon Paneli",
-        "serie-a": "Serie A İstasyon Paneli",
+        "premier_league": "Premier League İstasyon Paneli",
+        "super_lig": "Trendyol Süper Lig İstasyon Paneli",
+        "la_liga": "La Liga İstasyon Paneli",
+        "serie_a": "Serie A İstasyon Paneli",
         "lig1": "Ligue 1 İstasyon Paneli"
     };
 
@@ -36,8 +36,8 @@ export default function LeaguePage() {
         setSelectedSeason("Tüm Sezonlar");
 
         // Backend API'nize hangi ligin istendiğini query param olarak geçiyoruz: ?league=premier-league
-        const baseUrl = "http://127.0.0.1:8000";
-        
+        const baseUrl = "https://football-backend-bz0d.onrender.com";
+
         Promise.all([
             fetch(`${baseUrl}/teams?league=${leagueId}`).then(res => res.json()),
             fetch(`${baseUrl}/matches?league=${leagueId}`).then(res => res.json())
@@ -61,7 +61,7 @@ export default function LeaguePage() {
     const handleFilterMatches = () => {
         setLoading(true);
         
-        let url = `http://127.0.0.1:8000/matches?league=${leagueId}`;
+        let url = `https://football-backend-bz0d.onrender.com/matches?league=${leagueId}`;
         const params = [];
 
         if (selectedSeason !== "Tüm Sezonlar") {
