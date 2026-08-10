@@ -189,7 +189,7 @@ def get_teams(league: str | None = None, season: str | None = None):
 
 @app.get("/matches")
 def get_matches(
-    league: str, season: str | None = None, team: str | None = None
+    league: str, season: str | None = None , seasons: list[str]| None = None, team: str | None = None
 ):
     if league not in LEAGUES:
         raise HTTPException(
@@ -202,13 +202,37 @@ def get_matches(
         conditions = ['"lig_code" = %s']
         params = [league]
 
-        # 1. Sezon Filtresi
-        if season:
+            # 1. Sezon Filtresi
+        if seasons:
+            season_conditions = []
+
+            for s in seasons:
+                try:
+                    start_year, end_year = map(int, s.split("-"))
+                except ValueError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Geçersiz sezon formatı: {s}"
+                    )
+                start_date = f"{start_year}-08-01 00:00:00"
+                end_date = f"{end_year}-08-01 00:00:00"
+                season_conditions.append(
+                    '"Maç Tarihi" >= %s::timestamp AND "Maç Tarihi" < %s::timestamp'
+                )
+
+                params.extend([start_date, end_date])
+
+            conditions.append(
+                "(" + " OR ".join(season_conditions) + ")"
+            )
+
+        elif season:
             try:
                 start_year, end_year = map(int, season.split("-"))
             except ValueError:
                 raise HTTPException(
-                    status_code=400, detail="Sezon formatı 2016-2017 olmalı."
+                    status_code=400,
+                    detail="Sezon formatı 2016-2017 olmalı."
                 )
 
             start_date = f"{start_year}-08-01 00:00:00"
@@ -217,6 +241,7 @@ def get_matches(
             conditions.append(
                 '"Maç Tarihi" >= %s::timestamp AND "Maç Tarihi" < %s::timestamp'
             )
+
             params.extend([start_date, end_date])
 
         # 2. Takım Filtresi

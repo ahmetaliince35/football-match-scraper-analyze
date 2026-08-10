@@ -21,7 +21,7 @@ export default function Matches() {
         { id: "premier_league", name: "Premier League" },
         { id: "super_lig", name: "Trendyol Süper Lig" },
         { id: "laliga", name: "La Liga" },
-        { id: "lig1", name: "Ligue 1" },
+        { id: "lig1_a", name: "Ligue 1" },
         { id: "serie_a", name: "Serie A" }
     ];
 

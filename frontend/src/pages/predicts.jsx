@@ -17,6 +17,9 @@ const DotTooltip = ({ active, payload }) => {
     return null;
 };
 
+// Renk paleti
+const SEASON_COLORS = ["#3b82f6", "#10b981", "#eab308", "#f43f5e", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
+
 export default function Predicts() {
     const [selectedLeague, setSelectedLeague] = useState("");
     const [seasons, setSeasons] = useState([]);
@@ -31,27 +34,25 @@ export default function Predicts() {
     const [showTrends, setShowTrends] = useState(false);
 
     const dropdownRef = useRef(null);
-    const baseUrl = "http://127.0.0.1:8000";
+    const baseUrl = "https://football-backend-bz0d.onrender.com";
 
     const leaguesList = [
-        { id: "premier-league", name: "Premier League" },
-        { id: "superlig", name: "Trendyol Süper Lig" },
-        { id: "laliga", name: "La Liga" },
-        { id: "lig1", name: "Ligue 1" },
-        { id: "serie-a", name: "Serie A" }
+        { id: "premier_league", name: "Premier League" },
+        { id: "super_lig", name: "Trendyol Süper Lig" },
+        { id: "la_liga", name: "La Liga" },
+        { id: "lig1_a", name: "Ligue 1" },
+        { id: "serie_a", name: "Serie A" }
     ];
 
-    const generatedColors = {};
-    const getColorForSeason = (season) => {
-        const fallbackColors = ["#3b82f6", "#10b981", "#eab308", "#f43f5e", "#a855f7", "#06b6d4"];
-        if (generatedColors[season]) return generatedColors[season];
-        const count = Object.keys(generatedColors).length;
-        const chosenColor = fallbackColors[count % fallbackColors.length];
-        generatedColors[season] = chosenColor;
-        return chosenColor;
+    // Sezon bazlı sabit renk haritası oluşturma (Her sezon listesindeki sıraya göre dinamik renk atar)
+    const getSeasonColor = (seasonStr) => {
+        const index = seasons.indexOf(seasonStr);
+        if (index !== -1) {
+            return SEASON_COLORS[index % SEASON_COLORS.length];
+        }
+        return "#3b82f6"; // Varsayılan renk
     };
 
-    // Dropdown dışına tıklandığında menüyü kapatma
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -100,22 +101,21 @@ export default function Predicts() {
         }
 
         setLoading(true);
-        
+       
         let url = `${baseUrl}/matches?league=${selectedLeague}`;
-        if (selectedSeasons.length > 0 && selectedSeasons.length < seasons.length) {
-            url += `&seasons=${encodeURIComponent(selectedSeasons.join(','))}`;
-        }
+
+if (selectedSeasons.length > 0) {
+    selectedSeasons.forEach(season => {
+        url += `&seasons=${encodeURIComponent(season)}`;
+    });
+}
         
         fetch(url)
             .then(res => res.json())
             .then(data => {
                 const rawMatches = Array.isArray(data) ? data : [];
 
-                // 🛠️ DÜZELTME: Backend'e ek olarak frontend tarafında da seçili sezon filtrelemesi yapıyoruz
-                const filteredBySeason = (selectedSeasons.length > 0 && selectedSeasons.length < seasons.length)
-                    ? rawMatches.filter(m => selectedSeasons.includes(m.season))
-                    : rawMatches;
-
+            
                 // Takım eşleşme filtresi
                 const mutualMatches = filteredBySeason.filter(
                     m => (m.homeTeam === homeTeam && m.awayTeam === awayTeam) ||
@@ -148,9 +148,12 @@ export default function Predicts() {
             if (!m.date) return;
             
             const seasonStr = m.season || "Bilinmeyen";
-            const color = getColorForSeason(seasonStr);
-            const fullLabel = m.homeTeam === homeTeam ? `${m.homeTeam} ( Ev ) vs ${m.awayTeam} ( Dep )` : 
-            `${m.awayTeam} ( Dep ) vs ${m.homeTeam} ( Ev )`;
+            // 🔴 Her sezon string'i (örn: "2022-2023") doğrudan renk indeksine yönlendirilir
+            const color = getSeasonColor(seasonStr);
+
+            const fullLabel = m.homeTeam === homeTeam 
+                ? `${m.homeTeam} ( Ev ) vs ${m.awayTeam} ( Dep )` 
+                : `${m.awayTeam} ( Dep ) vs ${m.homeTeam} ( Ev )`;
 
             const gVal = (Number(m.homeGoals) || 0) + (Number(m.awayGoals) || 0);
             const yVal = Number(m.yellowCards) || 0;
@@ -337,6 +340,7 @@ export default function Predicts() {
                                             <ScatterChart margin={{ top: 10, right: 20, left: -25, bottom: 35 }}>
                                                 <CartesianGrid stroke="#1e293b" />
                                                 <XAxis 
+                                                    type="category"
                                                     dataKey="originalDate" 
                                                     stroke="#64748b" 
                                                     fontSize={9} 
@@ -349,7 +353,7 @@ export default function Predicts() {
                                                 <Tooltip content={<DotTooltip />} />
                                                 <Scatter data={features[config.id] || []}>
                                                     {(features[config.id] || []).map((entry, idx) => (
-                                                        <Cell key={idx} fill={entry.color} r={7} />
+                                                        <Cell key={`cell-${idx}`} fill={entry.color} r={7} />
                                                     ))}
                                                 </Scatter>
                                             </ScatterChart>

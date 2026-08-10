@@ -42,7 +42,7 @@ export default function Leagues() {
       glowColor: "hover:shadow-amber-500/20"
     },
     { 
-      id: "lig1", 
+      id: "lig1_a", 
       name: "Ligue 1", 
       bgColor: "bg-blue-950/20",
       borderColor: "border-blue-900/50 hover:border-blue-500",

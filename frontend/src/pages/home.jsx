@@ -12,10 +12,10 @@ export default function Home() {
     { id: "premier_league", name: "Premier League" },
     { id: "la_liga", name: "La Liga" },
     { id: "serie_a", name: "Serie A" },
-    { id: "lig1", name: "Ligue 1" },
+    { id: "lig1_a", name: "Ligue 1" },
   ]);
 
-  const [selectedLeague, setSelectedLeague] = useState("superlig");
+  const [selectedLeague, setSelectedLeague] = useState("super_lig");
   const [teams, setTeams] = useState([]);
 
   const [homeTeam, setHomeTeam] = useState("");
