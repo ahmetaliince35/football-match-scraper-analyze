@@ -9,6 +9,6 @@ export default defineConfig({
   ],
 
   preview: {
-    allowedHosts: ["football-match-scraper-analyze-qhrk.onrender.com"],
+    allowedHosts: true,
   },
 });
