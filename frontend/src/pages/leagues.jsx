@@ -1,4 +1,4 @@
-import Navbar from "../components/Navbar";
+import Navbar from "../components/navbar";
 import { useState, useEffect } from "react";
 
 export default function Leagues() {

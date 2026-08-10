@@ -1,4 +1,4 @@
-import Navbar from "../components/Navbar";
+import Navbar from "../components/navbar";
 import { useEffect, useState } from "react";
 // 1. ADIM: URL'deki dinamik lig parametresini okumak için useParams hook'unu import ediyoruz
 import { useParams, Link } from "react-router-dom"; 
