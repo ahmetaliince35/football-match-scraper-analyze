@@ -7,4 +7,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+
+  preview: {
+    allowedHosts: ["football-match-scraper-analyze-qhrk.onrender.com"],
+  },
 });
