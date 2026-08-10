@@ -1,66 +1,46 @@
-import sqlite3
+import os
 import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
-DB_FILE = "football.db"
+# 1. .env dosyasındaki değişkenleri yükle
+load_dotenv()
 
-CSV_FILES = {
-    "premier-league": "Premier_League.csv",
-    "laliga": "LaLiga.csv",
-    "lig1": "Lig-1.csv",
-    "superlig": "SuperLig.csv",
-    "serie-a": "Serie-A.csv"
+# 2. DATABASE_URL'i çek
+DATABASE_URL = "postgresql://postgres.gymllwbbwpzrlnbwuoau:Ahmetaliince.4207@aws-1-eu-west-1.pooler.supabase.com:6543/postgres"
+
+if not DATABASE_URL:
+    raise ValueError(".env dosyasında DATABASE_URL bulunamadı!")
+
+# 3. SQLAlchemy motorunu başlat
+engine = create_engine(DATABASE_URL)
+
+# 4. CSV dosyaları ve Lig eşleşmeleri
+csv_lig_haritasi = {
+    "SuperLig.csv": "super_lig",
+    "Premier_League.csv": "premier_league",
+    "LaLiga.csv": "la_liga",
+    "Serie-A.csv": "serie_a",
+    "Lig-1.csv": "lig1_a"
 }
 
-COLUMN_MAP = {
-    "Maç Tarihi": "date",
-    "Ev Sahibi Takım": "homeTeam",
-    "Deplasman Takım": "awayTeam",
-    "Ev Sahibi Gol": "homeGoals",
-    "Deplasman Gol": "awayGoals",
-    "Kazanan": "winner",
-    "Toplam Gol": "totalGoals",
-    "ofsayt": "offsides",
-    "Sarı Kart": "yellowCards",
-    "Kırmızı Kart": "redCards",
-    "Toplam Korner": "corners",
-    "Karşılıklı Gol": "btts",
-    "Kafa Golü": "headerGoal"
-}
+tum_df_listesi = []
 
-conn = sqlite3.connect(DB_FILE)
+for csv_dosya, lig_kodu in csv_lig_haritasi.items():
+    if os.path.exists(csv_dosya):
+        df = pd.read_csv(csv_dosya)
+        df['lig_code'] = lig_kodu  # Hangi lig olduğunu ayırt etmek için
+        tum_df_listesi.append(df)
+        print(f"Okundu: {csv_dosya}")
+    else:
+        print(f"Bulunamadı: {csv_dosya}")
 
-for league, csv_file in CSV_FILES.items():
+if tum_df_listesi:
+    birlesik_df = pd.concat(tum_df_listesi, ignore_index=True)
 
-    print(f"İçe aktarılıyor: {csv_file}")
+    print("\nSupabase'e aktarılıyor...")
 
-    df = pd.read_csv(csv_file)
+    # Supabase'e TEK BIR 'matches' tablosu olarak aktarır
+    birlesik_df.to_sql("matches", engine, if_exists='replace', index=False)
 
-    df = df.rename(columns=COLUMN_MAP)
-
-    df["league"] = league
-
-    df["date"] = pd.to_datetime(
-        df["date"],
-        format="%d.%m.%Y %H:%M",
-        errors="coerce"
-    )
-
-    df = df.dropna(subset=["date"])
-
-    df["season"] = df["date"].apply(
-        lambda x:
-            f"{x.year}-{x.year + 1}"
-            if x.month >= 8
-            else f"{x.year - 1}-{x.year}"
-    )
-
-    df.to_sql(
-        "matches",
-        conn,
-        if_exists="append",
-        index=False
-    )
-
-conn.close()
-
-print("CSV → SQLite aktarımı tamamlandı.")
+    print(f"\nİşlem Tamam! Toplam {len(birlesik_df)} satır 'matches' tablosuna aktarıldı.")
