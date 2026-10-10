@@ -192,7 +192,7 @@ def getMatchListURL(seazonUrl, page):
             if not href:
                 continue
             if href.startswith("/"):
-                href = "https://www.flashscore.com.tr" + href
+                href = "BaseUrl" + href
 
             mid = ""
             if "?mid=" in href:
@@ -282,12 +282,7 @@ def getSeazonURL(page,LigUrl):
     return seazonURLs
 
 def main():
-    LigList=["https://www.flashscore.com.tr/futbol/ingiltere/premier-league/arsiv/",
-             "https://www.flashscore.com.tr/futbol/turkiye/super-li-g/arsiv/",
-             "https://www.flashscore.com.tr/futbol/ispanya/laliga/arsiv/",
-             "https://www.flashscore.com.tr/futbol/fransa/lig-1/arsiv/",
-             "https://www.flashscore.com.tr/futbol/almanya/bundesliga/arsiv/",
-             "https://www.flashscore.com.tr/futbol/italya/serie-a/arsiv/"]
+    LigList=["Scraper_Links"]
     csv_files = ["Premier_League.csv",
                  "SuperLig.csv",
                  "LaLiga.csv",
