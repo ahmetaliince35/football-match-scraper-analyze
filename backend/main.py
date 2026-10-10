@@ -274,7 +274,7 @@ def getSeazonURL(page,LigUrl):
         for link in season_links:
             href = link.get_attribute("href")
             if href.startswith("/"):
-                href = "https://www.flashscore.com.tr" + href
+                href = "BaseURL" + href
             seazonURLs.append(href + "sonuclar/")
         print(seazonURLs)
     except Exception as e:
